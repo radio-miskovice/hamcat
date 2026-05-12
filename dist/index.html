@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hamcat Control Panel</title>
+    <script type="module" crossorigin src="/assets/index-CQDeJYLH.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-ClCbUvEF.css">
+  </head>
+  <body>
+    <div class="ambient ambient-1"></div>
+    <div class="ambient ambient-2"></div>
+
+    <main class="shell">
+      <header class="hero">
+        <p class="eyebrow">hamcat</p>
+        <h1>QMX and TS590 CAT Control</h1>
+        <p class="lead">
+          Browser-native control over Web Serial using your Hamcat API.
+        </p>
+      </header>
+
+      <section class="panel panel-connect">
+        <h2>Connection</h2>
+        <div class="row wrap">
+          <label>
+            Model
+            <select id="modelSelect">
+              <option value="qmx">QMX</option>
+              <option value="ts590">TS590</option>
+            </select>
+          </label>
+
+          <label>
+            Baud Rate
+            <input id="baudInput" type="number" min="300" step="100" value="115200" />
+          </label>
+        </div>
+
+        <div class="row actions">
+          <button id="connectBtn" type="button">Connect</button>
+          <button id="disconnectBtn" type="button" class="ghost" disabled>Disconnect</button>
+          <button id="refreshBtn" type="button" class="ghost" disabled>Refresh Values</button>
+        </div>
+
+        <p id="supportState" class="muted"></p>
+        <p id="statusLine" class="status-line">Disconnected</p>
+      </section>
+
+      <section class="panel panel-control">
+        <h2>Basic Control</h2>
+        <div class="control-rows">
+          <div class="control-row pair-row">
+            <div class="control-item">
+              <label for="rxVfoSelect">RX VFO</label>
+              <select id="rxVfoSelect" disabled>
+                <option value="A">A</option>
+                <option value="B">B</option>
+              </select>
+              <button id="setRxVfoBtn" type="button" class="ghost" disabled>Set RX VFO</button>
+            </div>
+
+            <div class="control-item">
+              <label for="txVfoSelect">TX VFO</label>
+              <select id="txVfoSelect" disabled>
+                <option value="A">A</option>
+                <option value="B">B</option>
+              </select>
+              <button id="setTxVfoBtn" type="button" class="ghost" disabled>Set TX VFO</button>
+            </div>
+          </div>
+
+          <div class="control-row pair-row">
+            <div class="control-item">
+              <label for="freqAInput">Frequency VFO A (Hz)</label>
+              <input id="freqAInput" type="number" min="0" step="1" value="7100000" disabled />
+              <button id="setFreqABtn" type="button" class="ghost" disabled>Set FA</button>
+            </div>
+
+            <div class="control-item">
+              <label for="freqBInput">Frequency VFO B (Hz)</label>
+              <input id="freqBInput" type="number" min="0" step="1" value="14070000" disabled />
+              <button id="setFreqBBtn" type="button" class="ghost" disabled>Set FB</button>
+            </div>
+          </div>
+
+          <div class="control-row">
+            <div class="control-item">
+              <span>Mode</span>
+              <div class="mode-radios" role="radiogroup" aria-label="Mode">
+                <label class="mode-option"><input type="radio" name="mode" value="LSB" />LSB</label>
+                <label class="mode-option"><input type="radio" name="mode" value="USB" checked />USB</label>
+                <label class="mode-option"><input type="radio" name="mode" value="CW" />CW</label>
+                <label class="mode-option"><input type="radio" name="mode" value="FM" />FM</label>
+                <label class="mode-option"><input type="radio" name="mode" value="AM" />AM</label>
+                <label class="mode-option"><input type="radio" name="mode" value="FSK" />FSK</label>
+                <label class="mode-option"><input type="radio" name="mode" value="CW-R" />CW-R</label>
+                <label class="mode-option"><input type="radio" name="mode" value="DATA" />DATA</label>
+                <label class="mode-option"><input type="radio" name="mode" value="FSK-R" />FSK-R</label>
+              </div>
+              <button id="setModeBtn" type="button" class="ghost" disabled>Set Mode</button>
+            </div>
+          </div>
+
+          <div class="control-row">
+            <div class="control-item">
+              <label for="txSourceSelect">TX Source</label>
+              <select id="txSourceSelect" disabled>
+                <option value="">Default</option>
+                <option value="MIC">MIC</option>
+                <option value="ACC2">ACC2</option>
+                <option value="USB">USB</option>
+                <option value="DIG">DIG</option>
+              </select>
+              <span class="control-note">Used by Switch TX when source is supported.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="row actions">
+          <button id="txBtn" type="button" disabled>Switch TX</button>
+          <button id="rxBtn" type="button" class="ghost" disabled>Switch RX</button>
+        </div>
+      </section>
+
+      <section class="panel panel-presets">
+        <h2>Band Presets and Macros</h2>
+        <div class="chips" id="presetButtons">
+          <button type="button" class="ghost preset-btn" data-freqa="7100000" data-freqb="7100000" data-mode="LSB">40m LSB</button>
+          <button type="button" class="ghost preset-btn" data-freqa="14074000" data-freqb="14074000" data-mode="DATA">20m FT8</button>
+          <button type="button" class="ghost preset-btn" data-freqa="10120000" data-freqb="10120000" data-mode="CW">30m CW</button>
+          <button type="button" class="ghost preset-btn" data-freqa="18100000" data-freqb="18100000" data-mode="USB">17m USB</button>
+        </div>
+
+        <div class="row actions">
+          <button id="macroCqBtn" type="button" class="ghost" disabled>Macro: CQ Setup</button>
+          <button id="macroSplitBtn" type="button" class="ghost" disabled>Macro: Split Setup</button>
+        </div>
+      </section>
+
+      <section class="panel panel-profile">
+        <h2>Profiles</h2>
+        <div class="row wrap">
+          <label>
+            Profile Name
+            <input id="profileNameInput" type="text" maxlength="40" placeholder="e.g. evening-40m" />
+          </label>
+
+          <label>
+            Saved Profiles
+            <select id="profileSelect" disabled>
+              <option value="">(none)</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="row actions">
+          <button id="saveProfileBtn" type="button" disabled>Save Current</button>
+          <button id="loadProfileBtn" type="button" class="ghost" disabled>Load Profile</button>
+          <button id="deleteProfileBtn" type="button" class="ghost" disabled>Delete Profile</button>
+        </div>
+      </section>
+
+      <section class="panel panel-log">
+        <h2>Activity</h2>
+        <pre id="logBox" class="log" aria-live="polite"></pre>
+      </section>
+    </main>
+
+  </body>
+</html>

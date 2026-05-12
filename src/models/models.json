@@ -1,0 +1,56 @@
+[
+  {
+    "family": "kenwood",
+    "model": "qmx",
+    "modelId": "kenwood-qmx",
+    "vendor": "QRP Labs",
+    "displayName": "QMX",
+    "signals": {
+      "rts": "none",
+      "dtr": "none"
+    },
+    "vfoSplitPattern": "same-band",
+    "splitControl": {
+      "kind": "mode-flag",
+      "command": "FT",
+      "splitValue": "2",
+      "vfoAValue": "0",
+      "vfoBValue": "1",
+      "splitRxVfo": "A",
+      "splitTxVfo": "B"
+    }
+  },
+  {
+    "family": "kenwood",
+    "model": "ts590",
+    "modelId": "kenwood-ts590",
+    "vendor": "Kenwood",
+    "displayName": "TS-590",
+    "signals": {
+      "rts": "none",
+      "dtr": "none"
+    },
+    "vfoSplitPattern": "any",
+    "txSourceMap": {
+      "MIC": "0",
+      "DATA": "1"
+    },
+    "splitControl": {
+      "kind": "vfo-pair",
+      "splitRxVfo": "A",
+      "splitTxVfo": "B"
+    },
+    "extra": {
+      "dataSource": {
+        "hint": "TX audio data source selection",
+        "value": {
+          "setCommandPrefix": "EX0630000",
+          "sourceMap": {
+            "ACC2": "0",
+            "USB": "1"
+          }
+        }
+      }
+    }
+  }
+]

@@ -1,0 +1,75 @@
+{
+  "name": "hamcat",
+  "version": "0.1.1",
+  "description": "Ham radio CAT serial transport for browser (Web Serial API) and Node.js (serialport)",
+  "type": "module",
+  "main": "./build/index.js",
+  "module": "./build/index.js",
+  "types": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "browser": {
+        "import": "./browser/index.browser.js",
+        "types": "./browser/index.browser.d.ts"
+      },
+      "import": "./build/index.js",
+      "types": "./build/index.d.ts"
+    },
+    "./browser": {
+      "import": "./browser/index.browser.js",
+      "types": "./browser/index.browser.d.ts"
+    },
+    "./node": {
+      "import": "./build/index.js",
+      "types": "./build/index.d.ts"
+    }
+  },
+  "files": [
+    "build",
+    "browser"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build:app": "vite build",
+    "preview": "vite preview",
+    "clean": "rimraf build browser",
+    "sync:models": "node scripts/generate-models-json.mjs",
+    "pretypecheck": "npm run sync:models",
+    "pretest": "npm run sync:models",
+    "prebuild:app": "npm run sync:models",
+    "prebuild": "npm run sync:models",
+    "prebuild:browser": "npm run sync:models",
+    "build": "rimraf build && esbuild src/index.ts --bundle --outfile=build/index.js --platform=node --format=esm --external:serialport --sourcemap && tsc -p tsconfig.build.json",
+    "build:browser": "rimraf browser && esbuild src/index.browser.ts --bundle --outfile=browser/index.browser.js --platform=browser --format=esm --sourcemap && tsc -p tsconfig.browser.json",
+    "build:watch": "esbuild src/index.browser.ts --bundle --outfile=browser/index.browser.js --platform=browser --format=esm --sourcemap --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "ham radio",
+    "cat",
+    "serial",
+    "web serial api",
+    "serialport"
+  ],
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "esbuild": "^0.28.0",
+    "rimraf": "^6.0.1",
+    "serialport": "^12.0.0",
+    "typescript": "^6.0.3",
+    "yaml": "^2.8.1",
+    "vite": "^7.2.0",
+    "vitest": "^4.1.5"
+  },
+  "peerDependencies": {
+    "serialport": "^12.0.0"
+  },
+  "peerDependenciesMeta": {
+    "serialport": {
+      "optional": true
+    }
+  }
+}
