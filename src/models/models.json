@@ -91,11 +91,47 @@
       "vendor": "kenwood",
       "displayName": "TS-690"
     },
+    "kenwood.ts570": {
+      "sameAs": "kenwood.ts480",
+      "model": "ts570",
+      "vendor": "kenwood",
+      "displayName": "TS-570"
+    },
+    "kenwood.ts2000": {
+      "sameAs": "kenwood.ts480",
+      "model": "ts2000",
+      "vendor": "kenwood",
+      "displayName": "TS-2000"
+    },
+    "kenwood.ts880": {
+      "sameAs": "kenwood.ts480",
+      "model": "ts880",
+      "vendor": "kenwood",
+      "displayName": "TS-880"
+    },
     "elecraft.kx3": {
       "sameAs": "kenwood.ts480",
       "model": "kx3",
       "vendor": "elecraft",
       "displayName": "KX-3"
+    },
+    "elecraft.kx2": {
+      "sameAs": "elecraft.kx3",
+      "model": "kx2",
+      "vendor": "elecraft",
+      "displayName": "KX-2"
+    },
+    "elecraft.k3": {
+      "sameAs": "elecraft.kx3",
+      "model": "k3",
+      "vendor": "elecraft",
+      "displayName": "K3"
+    },
+    "elecraft.k2": {
+      "sameAs": "elecraft.kx3",
+      "model": "k2",
+      "vendor": "elecraft",
+      "displayName": "K2"
     },
     "labs599.tx500": {
       "protocol": "kenwood",

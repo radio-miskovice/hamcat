@@ -52,6 +52,27 @@ export function normalizeModelName(model: string): string {
     return "ts690";
   }
   if (
+    normalized === "ts-570" ||
+    normalized === "kenwood-ts570" ||
+    normalized === "kenwood.ts570"
+  ) {
+    return "ts570";
+  }
+  if (
+    normalized === "ts-2000" ||
+    normalized === "kenwood-ts2000" ||
+    normalized === "kenwood.ts2000"
+  ) {
+    return "ts2000";
+  }
+  if (
+    normalized === "ts-880" ||
+    normalized === "kenwood-ts880" ||
+    normalized === "kenwood.ts880"
+  ) {
+    return "ts880";
+  }
+  if (
     normalized === "kenwood-qmx" ||
     normalized === "qrplabs-qmx" ||
     normalized === "qrplabs.qmx"
@@ -64,6 +85,25 @@ export function normalizeModelName(model: string): string {
     normalized === "elecraft.kx3"
   ) {
     return "kx3";
+  }
+  if (
+    normalized === "kx-2" ||
+    normalized === "elecraft-kx2" ||
+    normalized === "elecraft.kx2"
+  ) {
+    return "kx2";
+  }
+  if (
+    normalized === "elecraft-k3" ||
+    normalized === "elecraft.k3"
+  ) {
+    return "k3";
+  }
+  if (
+    normalized === "elecraft-k2" ||
+    normalized === "elecraft.k2"
+  ) {
+    return "k2";
   }
   return normalized;
 }
