@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^node -e \"const fs=require\\('fs'\\);const yaml=require\\('yaml'\\);const t=fs\\.readFileSync\\('src/models/models\\.yaml','utf8'\\);const p=yaml\\.parse\\(t\\);console\\.log\\(Object\\.keys\\(p\\.hamCatModels\\['kenwood-ts590'\\]\\)\\);console\\.log\\(Object\\.keys\\(p\\.hamCatModels\\['kenwood-tx500'\\]\\)\\);\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

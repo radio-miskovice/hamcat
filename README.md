@@ -96,12 +96,23 @@ Source profile file:
 
 YAML hierarchy:
 
-- top level key: protocol family
-- second level key: model name
+- top level object contains metadata and `hamCatModels`
+- each `hamCatModels` key is a long model id in `<vendorid>.<modelid>` format
+- only lowercase letters, digits, and `.` are allowed in long model ids
 
 Common model fields stay at model root (`signals`, `vfoSplitPattern`,
 `txSourceMap`). Additional model-specific fields go under `extra`, where each
 entry uses `{ hint, value }`.
+
+Split note:
+
+- For standard Kenwood-style split control, omit `splitControl` and let baseline `FR`/`FT` behavior handle RX/TX VFO assignment.
+- Define `splitControl` only for rigs with non-standard split behavior (for example, QMX `FT2` mode-flag split).
+
+Model inheritance note:
+
+- Use `sameAs` to reference a model with identical CAT semantics.
+- A `sameAs` entry can stay minimal (typically just long id, display name, and `sameAs`), inheriting protocol/features/extras from the referenced model.
 
 Generated file:
 

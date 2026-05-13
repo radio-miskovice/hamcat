@@ -1,8 +1,21 @@
-kenwood:
-  qmx:
-    vendor: QRP Labs
+version: "20260513.1"
+schema: ./models-schema.json
+schemaVersion: 1.0.0
+vendors:
+  - id: qrplabs
+    name: QRP Labs
+  - id: kenwood
+    name: Kenwood
+  - id: labs599
+    name: Labs 599
+  - id: elecraft
+    name: Elecraft
+hamCatModels:
+  qrplabs.qmx:
+    protocol: kenwood
+    model: qmx
+    vendor: qrplabs
     displayName: QMX
-    modelId: kenwood-qmx
     signals:
       rts: none
       dtr: none
@@ -16,10 +29,11 @@ kenwood:
       splitRxVfo: A
       splitTxVfo: B
 
-  ts590:
-    vendor: Kenwood
+  kenwood.ts590:
+    protocol: kenwood
+    model: ts590
+    vendor: kenwood
     displayName: TS-590
-    modelId: kenwood-ts590
     signals:
       rts: none
       dtr: none
@@ -27,10 +41,6 @@ kenwood:
     txSourceMap:
       MIC: "0"
       DATA: "1"
-    splitControl:
-      kind: vfo-pair
-      splitRxVfo: A
-      splitTxVfo: B
     extra:
       dataSource:
         hint: TX audio data source selection
@@ -39,3 +49,41 @@ kenwood:
           sourceMap:
             ACC2: "0"
             USB: "1"
+
+  kenwood.ts480:
+    protocol: kenwood
+    model: ts480
+    vendor: kenwood
+    displayName: TS-480
+    signals:
+      rts: none
+      dtr: none
+    vfoSplitPattern: any
+
+  kenwood.ts450:
+    sameAs: kenwood.ts480
+    model: ts450
+    vendor: kenwood
+    displayName: TS-450
+
+  kenwood.ts690:
+    sameAs: kenwood.ts480
+    model: ts690
+    vendor: kenwood
+    displayName: TS-690
+
+  elecraft.kx3:
+    sameAs: kenwood.ts480
+    model: kx3
+    vendor: elecraft
+    displayName: KX-3
+
+  labs599.tx500:
+    protocol: kenwood
+    model: tx500
+    vendor: labs599
+    displayName: TX-500
+    signals:
+      rts: ptt-on
+      dtr: none
+    vfoSplitPattern: same-band

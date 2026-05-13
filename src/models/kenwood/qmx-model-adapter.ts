@@ -4,7 +4,7 @@ const textEncoder = new TextEncoder();
 
 export function createQmxModelAdapter(): ModelProtocolAdapter {
   return {
-    modelId: "kenwood-qmx",
+    modelId: "qrplabs.qmx",
     buildCommand(command: CatCommand) {
       if (command.code !== "TX") {
         return null;

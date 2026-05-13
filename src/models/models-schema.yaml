@@ -1,0 +1,168 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "./models-schema.json"
+title: Hamcat Model Catalog
+type: object
+additionalProperties: false
+required:
+  - version
+  - schema
+  - schemaVersion
+  - hamCatModels
+properties:
+  version:
+    type: string
+    description: Catalog version in YYYYMMDD.x format.
+    pattern: ^\d{8}\.\d+$
+  schema:
+    type: string
+    description: Path or URI to this schema.
+  schemaVersion:
+    type: string
+    description: Semantic version of the catalog schema.
+    pattern: ^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$
+  vendors:
+    type: array
+    items:
+      $ref: "#/$defs/vendor"
+  hamCatModels:
+    type: object
+    description: Model entries keyed by modelId.
+    propertyNames:
+      pattern: ^[a-z0-9]+(?:\.[a-z0-9]+)+$
+    additionalProperties:
+      $ref: "#/$defs/hamCatModel"
+$defs:
+  protocol:
+    type: string
+    enum:
+      - kenwood
+      - yaesu
+      - icom
+  signalFunction:
+    type: string
+    enum:
+      - none
+      - ptt-on
+      - ptt-off
+      - flow
+      - on
+      - off
+  signals:
+    type: object
+    additionalProperties: false
+    properties:
+      rts:
+        $ref: "#/$defs/signalFunction"
+      dtr:
+        $ref: "#/$defs/signalFunction"
+  vfoId:
+    type: string
+    enum:
+      - A
+      - B
+  splitControl:
+    oneOf:
+      - type: object
+        additionalProperties: false
+        required:
+          - kind
+        properties:
+          kind:
+            const: vfo-pair
+          splitRxVfo:
+            $ref: "#/$defs/vfoId"
+          splitTxVfo:
+            $ref: "#/$defs/vfoId"
+      - type: object
+        additionalProperties: false
+        required:
+          - kind
+        properties:
+          kind:
+            const: mode-flag
+          command:
+            type: string
+            minLength: 1
+          splitValue:
+            type: string
+            minLength: 1
+          vfoAValue:
+            type: string
+            minLength: 1
+          vfoBValue:
+            type: string
+            minLength: 1
+          splitRxVfo:
+            $ref: "#/$defs/vfoId"
+          splitTxVfo:
+            $ref: "#/$defs/vfoId"
+  extraFeature:
+    type: object
+    additionalProperties: false
+    required:
+      - hint
+      - value
+    properties:
+      hint:
+        type: string
+      value: true
+  vendor:
+    type: object
+    additionalProperties: false
+    required:
+      - id
+      - name
+    properties:
+      id:
+        type: string
+        pattern: ^[a-z0-9]+$
+      name:
+        type: string
+        minLength: 1
+  hamCatModel:
+    type: object
+    additionalProperties: false
+    anyOf:
+      - required:
+          - protocol
+          - model
+      - required:
+          - sameAs
+    properties:
+      sameAs:
+        type: string
+        pattern: ^[a-z0-9]+(?:\.[a-z0-9]+)+$
+      protocol:
+        $ref: "#/$defs/protocol"
+      model:
+        type: string
+        minLength: 1
+      vendor:
+        type: string
+        pattern: ^[a-z0-9]+$
+      displayName:
+        type: string
+        minLength: 1
+      signals:
+        $ref: "#/$defs/signals"
+      vfoSplitPattern:
+        type: string
+        enum:
+          - same-band
+          - any
+      txSourceMap:
+        type: object
+        propertyNames:
+          type: string
+          minLength: 1
+        additionalProperties:
+          type: string
+      splitControl:
+        $ref: "#/$defs/splitControl"
+      extra:
+        type: object
+        propertyNames:
+          type: string
+          minLength: 1
+        additionalProperties:
+          $ref: "#/$defs/extraFeature"

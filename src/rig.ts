@@ -3,7 +3,15 @@ import type { ModulationMode, TxSwitchOptions, VfoId } from "./control/types";
 import type { CatResponse, ProtocolAdapter, ProtocolFamily } from "./protocol";
 import { connectSerialSession, type SerialSession } from "./serial-session";
 import { type RigModelFeatures } from "./models/features";
-import { getModelFeatures } from "./models/feature-registry";
+import {
+  getModelFeatures,
+  listModels,
+  type ListModelsOptions,
+  type RigModelListItem
+} from "./models/feature-registry";
+
+export type RigListModelsOptions = ListModelsOptions;
+export type RigListedModel = RigModelListItem;
 
 export interface RigConnectOptions {
   dataBits?: 7 | 8;
@@ -94,6 +102,8 @@ export interface RigInterface {
     data?: unknown,
     options?: { vfo?: VfoId; source?: string }
   ): Promise<void>;
+
+  listModels(options?: RigListModelsOptions): RigListedModel[];
 }
 
 export class Rig implements RigInterface {
@@ -120,8 +130,16 @@ export class Rig implements RigInterface {
     return new Rig(family, model);
   }
 
+  static listModels(options: RigListModelsOptions = {}): RigListedModel[] {
+    return listModels(options);
+  }
+
   get features(): RigModelFeatures | null {
     return this.modelFeatures;
+  }
+
+  listModels(options: RigListModelsOptions = {}): RigListedModel[] {
+    return Rig.listModels(options);
   }
 
   async connect(baudRate: number, options: RigConnectOptions = {}): Promise<void> {
@@ -346,6 +364,19 @@ export class Rig implements RigInterface {
       const current = await this.querySplitModeValue();
       const target = current === splitValue ? defaultSimplex : current;
       await this.client.sendCommand({ code: command, args: [target] });
+      return;
+    }
+
+    if (splitControl?.kind === "vfo-pair") {
+      const rxVfo = await this.getRxVfo();
+      const oppositeVfo: VfoId = rxVfo === "A" ? "B" : "A";
+
+      if (mode === "on") {
+        await this.setTxVfo(oppositeVfo);
+        return;
+      }
+
+      await this.setTxVfo(rxVfo);
       return;
     }
 

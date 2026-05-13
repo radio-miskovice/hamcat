@@ -24,7 +24,13 @@ describe("HamcatClient", () => {
   it("maps simplified model string to model adapter", () => {
     const client = new HamcatClient();
     client.useProtocol("kenwood", "qmx");
-    expect(client.getStatus().modelId).toBe("kenwood-qmx");
+    expect(client.getStatus().modelId).toBe("qrplabs.qmx");
+  });
+
+  it("maps catalog-only model string to generic model adapter", () => {
+    const client = new HamcatClient();
+    client.useProtocol("kenwood", "ts480");
+    expect(client.getStatus().modelId).toBe("kenwood.ts480");
   });
 });
 
@@ -192,6 +198,28 @@ describe("Protocol adapters", () => {
 });
 
 describe("Rig facade", () => {
+  it("lists available models and supports filtering", () => {
+    const all = Rig.listModels();
+    expect(all.some((entry) => entry.modelId === "qrplabs.qmx")).toBe(true);
+    expect(all.some((entry) => entry.modelId === "kenwood.ts590")).toBe(true);
+    expect(all.some((entry) => entry.modelId === "kenwood.ts480")).toBe(true);
+    expect(all.some((entry) => entry.modelId === "kenwood.ts450")).toBe(true);
+    expect(all.some((entry) => entry.modelId === "kenwood.ts690")).toBe(true);
+    expect(all.some((entry) => entry.modelId === "elecraft.kx3")).toBe(true);
+
+    const byFamily = Rig.listModels({ family: "kenwood" });
+    expect(byFamily.length).toBeGreaterThanOrEqual(5);
+
+    const byVendor = Rig.listModels({ vendor: "qrp" });
+    expect(byVendor.map((entry) => entry.modelId)).toContain("qrplabs.qmx");
+
+    const byPartialModel = Rig.listModels({ model: "590" });
+    expect(byPartialModel.map((entry) => entry.modelId)).toContain("kenwood.ts590");
+
+    const rig = Rig.create("kenwood", "qmx");
+    expect(rig.listModels({ model: "qmx" }).map((entry) => entry.modelId)).toContain("qrplabs.qmx");
+  });
+
   it("exposes a compact control surface over HamcatClient", async () => {
     const session = new MockSerialSession();
     const rig = Rig.create("kenwood", "qmx");
@@ -320,7 +348,7 @@ describe("Rig facade", () => {
     await expect(splitOffPromise).resolves.toBe("off");
   });
 
-  it("enters and exits split mode for vfo-pair models", async () => {
+  it("enters and exits split mode for standard FT/FR models", async () => {
     const session = new MockSerialSession();
     const rig = Rig.create("kenwood", "ts590");
 

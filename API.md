@@ -48,6 +48,8 @@ interface RigInterface {
 	tx(options?: TxSwitchOptions): Promise<void>;
 	rx(): Promise<void>;
 
+	listModels(options?: RigListModelsOptions): RigListedModel[];
+
 	get(functionName: RigFunction, options?: { vfo?: VfoId }): Promise<unknown>;
 	set(
 		functionName: RigFunction,
@@ -58,6 +60,7 @@ interface RigInterface {
 
 class Rig {
 	static create(family: ProtocolFamily, model?: string): Rig;
+	static listModels(options?: RigListModelsOptions): RigListedModel[];
 	static connect(
 		family: ProtocolFamily,
 		model: string | undefined,
@@ -97,6 +100,7 @@ class Rig {
 
 	tx(options?: TxSwitchOptions): Promise<void>;
 	rx(): Promise<void>;
+	listModels(options?: RigListModelsOptions): RigListedModel[];
 
 	get(functionName: RigFunction, options?: { vfo?: VfoId }): Promise<unknown>;
 	set(
@@ -205,6 +209,22 @@ type RigFunction =
 	| "dataSource";
 
 type SplitMode = "on" | "off";
+
+interface RigListModelsOptions {
+	vendor?: string;
+	family?: "kenwood" | "yaesu" | "icom";
+	model?: string;
+}
+
+interface RigListedModel {
+	modelId: string;
+	model: string;
+	displayName?: string;
+	vendor?: string;
+	vendorName?: string;
+	protocol: "kenwood" | "yaesu" | "icom";
+	family: "kenwood" | "yaesu" | "icom";
+}
 ```
 
 ## Serial Session API
@@ -474,5 +494,6 @@ When loaded in a browser context, the package assigns `window.Hamcat` with:
 ## Compatibility and Behavior Notes
 
 - High-level control (`Rig`) requires protocol adapters to provide baseline control capabilities.
-- Split behavior is model-driven through baseline model features (`splitControl`).
+- Standard split behavior uses `FR` (RX VFO) and `FT` (TX VFO); models following this pattern should omit `splitControl`.
+- Use `splitControl` only for rigs with non-standard split semantics (for example, QMX mode-flag split via `FT2`).
 - Model metadata source is `src/models/models.yaml`, converted during build to `src/models/models.json`.

@@ -1,6 +1,32 @@
 import type { ProtocolFamily } from "../protocol";
 import featureEntries from "./models.json";
 
+export interface RigModelVendor {
+  id: string;
+  name: string;
+}
+
+export interface RigModelCatalogEntry {
+  sameAs?: string;
+  protocol?: ProtocolFamily;
+  model?: string;
+  vendor?: string;
+  displayName?: string;
+  signals?: RigSignalFeatures;
+  vfoSplitPattern?: VfoSplitPattern;
+  splitControl?: RigSplitControlFeatures;
+  txSourceMap?: Record<string, string>;
+  extra?: RigExtraFeatures;
+}
+
+export interface RigModelCatalog {
+  version: string;
+  schema: string;
+  schemaVersion: string;
+  vendors?: RigModelVendor[];
+  hamCatModels: Record<string, RigModelCatalogEntry>;
+}
+
 export type SignalFunction =
   | "none"
   | "ptt-on"
@@ -43,8 +69,12 @@ export interface RigExtraFeatures {
 
 export interface RigModelFeatures {
   family: ProtocolFamily;
+  protocol: ProtocolFamily;
   model: string;
   modelId: string;
+  sameAs?: string;
+  vendor?: string;
+  displayName?: string;
   signals?: RigSignalFeatures;
   vfoSplitPattern?: VfoSplitPattern;
   splitControl?: RigSplitControlFeatures;
@@ -52,5 +82,76 @@ export interface RigModelFeatures {
   extra?: RigExtraFeatures;
 }
 
-export const RIG_MODEL_FEATURES: RigModelFeatures[] =
-  featureEntries as RigModelFeatures[];
+export const RIG_MODEL_CATALOG: RigModelCatalog = featureEntries as RigModelCatalog;
+
+function parseModelId(modelId: string): { vendorFromId?: string; modelFromId?: string } {
+  const parts = modelId.split(".");
+  if (parts.length < 2) {
+    return {};
+  }
+
+  return {
+    vendorFromId: parts[0],
+    modelFromId: parts[parts.length - 1]
+  };
+}
+
+function resolveCatalogEntry(
+  modelId: string,
+  cache: Map<string, RigModelCatalogEntry>,
+  stack: Set<string>
+): RigModelCatalogEntry {
+  const cached = cache.get(modelId);
+  if (cached) {
+    return cached;
+  }
+
+  const current = RIG_MODEL_CATALOG.hamCatModels[modelId];
+  if (!current) {
+    throw new Error(`Model '${modelId}' is not present in catalog.`);
+  }
+
+  if (stack.has(modelId)) {
+    throw new Error(`Circular sameAs reference detected for '${modelId}'.`);
+  }
+
+  stack.add(modelId);
+  const base = current.sameAs
+    ? resolveCatalogEntry(current.sameAs, cache, stack)
+    : undefined;
+
+  const { vendorFromId, modelFromId } = parseModelId(modelId);
+  const resolved: RigModelCatalogEntry = {
+    ...base,
+    ...current,
+    vendor: current.vendor ?? base?.vendor ?? vendorFromId,
+    model: current.model ?? base?.model ?? modelFromId,
+    protocol: current.protocol ?? base?.protocol
+  };
+
+  stack.delete(modelId);
+
+  if (!resolved.protocol) {
+    throw new Error(`Model '${modelId}' must define protocol directly or through sameAs.`);
+  }
+
+  if (!resolved.model) {
+    throw new Error(`Model '${modelId}' must define model directly or through sameAs.`);
+  }
+
+  cache.set(modelId, resolved);
+  return resolved;
+}
+
+export const RIG_MODEL_FEATURES: RigModelFeatures[] = Object.entries(
+  RIG_MODEL_CATALOG.hamCatModels
+).map(([modelId]) => {
+  const resolved = resolveCatalogEntry(modelId, new Map(), new Set());
+  return {
+    ...resolved,
+    family: resolved.protocol!,
+    protocol: resolved.protocol!,
+    model: resolved.model!,
+    modelId
+  };
+});

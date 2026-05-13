@@ -7,10 +7,13 @@ import {
 } from "../src/index.browser";
 
 type ModelChoice = "qmx" | "ts590";
+type SignalSetting = "" | "on" | "off";
 
 interface StoredProfile {
   name: string;
   model: ModelChoice;
+  rts?: SignalSetting;
+  dtr?: SignalSetting;
   rxVfo: VfoId;
   txVfo: VfoId;
   freqA: number;
@@ -23,6 +26,8 @@ const PROFILE_STORAGE_KEY = "hamcat.control.profiles.v1";
 
 const modelSelect = byId<HTMLSelectElement>("modelSelect");
 const baudInput = byId<HTMLInputElement>("baudInput");
+const rtsSelect = byId<HTMLSelectElement>("rtsSelect");
+const dtrSelect = byId<HTMLSelectElement>("dtrSelect");
 const connectBtn = byId<HTMLButtonElement>("connectBtn");
 const disconnectBtn = byId<HTMLButtonElement>("disconnectBtn");
 const refreshBtn = byId<HTMLButtonElement>("refreshBtn");
@@ -111,6 +116,8 @@ async function connectRadio(): Promise<void> {
   }
 
   const model = modelSelect.value as ModelChoice;
+  const rts = parseSignalSelect(rtsSelect.value);
+  const dtr = parseSignalSelect(dtrSelect.value);
   rig = Rig.create("kenwood", model);
   rig.onStatus((status: RigStatus) => {
     const family = status.protocolFamily ?? "n/a";
@@ -120,12 +127,14 @@ async function connectRadio(): Promise<void> {
       : "Disconnected";
   });
 
-  await rig.connect(baudRate);
+  await rig.connect(baudRate, { rts, dtr });
   connected = true;
   setConnectionState(true);
   toggleTxSourceForModel(model);
   refreshProfileOptions();
-  appendLog(`Connected on ${baudRate} baud using ${model.toUpperCase()} profile.`);
+  appendLog(
+    `Connected on ${baudRate} baud using ${model.toUpperCase()} profile (RTS=${formatSignal(rts)}, DTR=${formatSignal(dtr)}).`
+  );
 
   await refreshValues();
 }
@@ -304,6 +313,8 @@ async function saveCurrentProfile(): Promise<void> {
   const next: StoredProfile = {
     name,
     model: modelSelect.value as ModelChoice,
+    rts: normalizeSignalSetting(rtsSelect.value),
+    dtr: normalizeSignalSetting(dtrSelect.value),
     rxVfo: rxVfoSelect.value as VfoId,
     txVfo: txVfoSelect.value as VfoId,
     freqA: parseHz(freqAInput.value, "VFO A"),
@@ -343,6 +354,10 @@ async function loadSelectedProfile(): Promise<void> {
     );
   }
 
+  const profileRts = normalizeSignalSetting(profile.rts);
+  const profileDtr = normalizeSignalSetting(profile.dtr);
+  rtsSelect.value = profileRts;
+  dtrSelect.value = profileDtr;
   toggleTxSourceForModel(profile.model);
   rxVfoSelect.value = profile.rxVfo;
   txVfoSelect.value = profile.txVfo;
@@ -357,6 +372,10 @@ async function loadSelectedProfile(): Promise<void> {
   await setFreqAOnly();
   await setFreqBOnly();
   await setModeOnly();
+  appendLog(
+    `Profile signal settings restored (RTS=${formatSignal(parseSignalSelect(profileRts))}, DTR=${formatSignal(parseSignalSelect(profileDtr))}). Reconnect to apply serial line changes.`,
+    true
+  );
   appendLog(`Loaded profile ${profile.name} into current session.`);
 }
 
@@ -378,6 +397,26 @@ function parseHz(raw: string, fieldName: string): number {
     throw new Error(`${fieldName} frequency must be a non-negative integer (Hz).`);
   }
   return parsed;
+}
+
+function parseSignalSelect(value: string): boolean | undefined {
+  if (value === "on") {
+    return true;
+  }
+  if (value === "off") {
+    return false;
+  }
+  return undefined;
+}
+
+function formatSignal(value: boolean | undefined): string {
+  if (value === true) {
+    return "on";
+  }
+  if (value === false) {
+    return "off";
+  }
+  return "auto";
 }
 
 function ensureConnected(): void {
@@ -511,15 +550,28 @@ function updateProfileActionState(): void {
   deleteProfileBtn.disabled = !connected || !hasSelection;
 }
 
+function normalizeSignalSetting(value: unknown): SignalSetting {
+  if (value === "on" || value === "off") {
+    return value;
+  }
+  return "";
+}
+
 function isStoredProfile(value: unknown): value is StoredProfile {
   if (!value || typeof value !== "object") {
     return false;
   }
 
   const candidate = value as Record<string, unknown>;
+  const rts = candidate.rts;
+  const dtr = candidate.dtr;
+  const hasValidRts = rts === undefined || rts === "" || rts === "on" || rts === "off";
+  const hasValidDtr = dtr === undefined || dtr === "" || dtr === "on" || dtr === "off";
   return (
     typeof candidate.name === "string" &&
     (candidate.model === "qmx" || candidate.model === "ts590") &&
+    hasValidRts &&
+    hasValidDtr &&
     (candidate.rxVfo === "A" || candidate.rxVfo === "B") &&
     (candidate.txVfo === "A" || candidate.txVfo === "B") &&
     Number.isInteger(candidate.freqA) &&

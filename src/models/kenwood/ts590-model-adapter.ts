@@ -3,7 +3,7 @@ import { getModelFeaturesByModelId } from "../feature-registry";
 
 const textEncoder = new TextEncoder();
 
-const TS590_MODEL_ID = "kenwood-ts590";
+const TS590_MODEL_ID = "kenwood.ts590";
 
 const profile = getModelFeaturesByModelId(TS590_MODEL_ID);
 
