@@ -1,7 +1,14 @@
-import { HamcatClient, type HamcatStatus, type StatusListener } from "./core";
 import type { ModulationMode, TxSwitchOptions, VfoId } from "./control/types";
-import type { CatResponse, ProtocolAdapter, ProtocolFamily } from "./protocol";
+import {
+  createProtocolAdapter,
+  type CatCommand,
+  type CatResponse,
+  type ProtocolAdapter,
+  type ProtocolControlClient,
+  type ProtocolFamily
+} from "./protocol";
 import { connectSerialSession, type SerialSession } from "./serial-session";
+import { createModelAdapterByName } from "./models";
 import { type RigModelFeatures } from "./models/features";
 import {
   getModelFeatures,
@@ -24,7 +31,15 @@ export interface RigConnectOptions {
   requestOptions?: SerialPortRequestOptions;
 }
 
-export interface RigStatus extends HamcatStatus {
+export interface RigTransportStatus {
+  connected: boolean;
+  bytesTx: number;
+  bytesRx: number;
+  protocolFamily?: ProtocolFamily;
+  modelId?: string;
+}
+
+export interface RigStatus extends RigTransportStatus {
   rxVfo?: VfoId;
   txVfo?: VfoId;
   frequencyAHz?: number;
@@ -52,14 +67,19 @@ export interface RigOperationResult {
 
 export type RigResponseListener = (response: CatResponse) => void;
 export type RigResultListener = (result: RigOperationResult) => void;
+export type RigStatusListener = (status: RigTransportStatus) => void;
+
+interface QueryCommandOptions {
+  timeoutMs?: number;
+  match?: (response: CatResponse) => boolean;
+}
 
 export type RigFunction =
   | "freq"
   | "mode"
   | "rxVfo"
   | "txVfo"
-  | "tx"
-  | "rx"
+  | "ptt"
   | "dataSource";
 
 export interface RigInterface {
@@ -69,8 +89,8 @@ export interface RigInterface {
   disconnect(): Promise<void>;
   getStatus(): Promise<RigStatus>;
 
-  onStatus(listener: StatusListener): void;
-  offStatus(listener: StatusListener): void;
+  onStatus(listener: RigStatusListener): void;
+  offStatus(listener: RigStatusListener): void;
   onResponse(listener: RigResponseListener): void;
   offResponse(listener: RigResponseListener): void;
   onResult(listener: RigResultListener): void;
@@ -88,8 +108,8 @@ export interface RigInterface {
   getRxVfo(): Promise<VfoId>;
   setTxVfo(vfo: VfoId): Promise<void>;
   getTxVfo(): Promise<VfoId>;
-  tx(options?: TxSwitchOptions): Promise<void>;
-  rx(): Promise<void>;
+  setPtt(on: boolean, options?: TxSwitchOptions): Promise<void>;
+  getPtt(): Promise<boolean>;
 
   get(functionName: RigFunction, options?: { vfo?: VfoId }): Promise<unknown>;
   set(
@@ -102,24 +122,34 @@ export interface RigInterface {
 }
 
 export class Rig implements RigInterface {
+  private session: SerialSession | null = null;
+  private protocolAdapter: ProtocolAdapter | null = null;
+  private transportStatus: RigTransportStatus = {
+    connected: false,
+    bytesTx: 0,
+    bytesRx: 0
+  };
+
   private readonly modelFeatures: RigModelFeatures | null;
+  private lastPttState = false;
+  private readonly statusListeners: RigStatusListener[] = [];
   private readonly responseListeners: RigResponseListener[] = [];
   private readonly resultListeners: RigResultListener[] = [];
+
+  // Internal bridge used by family/model adapters that depend on ProtocolControlClient.
+  private readonly protocolClient: ProtocolControlClient = {
+    sendCommand: (command) => this.sendCommand(command),
+    queryCommand: (command) => this.queryCommand(command),
+    getStatus: () => this.getTransportStatus()
+  };
 
   protected constructor(
     private readonly family: ProtocolFamily,
     private readonly model?: string
   ) {
     this.modelFeatures = model ? getModelFeatures(family, model) : null;
-    this.client.useProtocol(family, model);
-    this.client.on("response", (response: CatResponse) => {
-      for (const listener of this.responseListeners) {
-        queueMicrotask(() => listener(response));
-      }
-    });
+    this.useProtocol(family, model);
   }
-
-  private readonly client = new HamcatClient();
 
   static create(family: ProtocolFamily, model?: string): Rig {
     return new Rig(family, model);
@@ -147,6 +177,8 @@ export class Rig implements RigInterface {
       flowControl
     } = options;
 
+    const signalOptions = this.resolveConnectSignalOptions(options);
+
     const session = await connectSerialSession(
       {
         baudRate,
@@ -157,10 +189,7 @@ export class Rig implements RigInterface {
         flowControl
       },
         requestOptions,
-        {
-          rts: options.rts,
-          dtr: options.dtr
-        }
+        signalOptions
     );
 
     await this.connectWithSession(session);
@@ -178,26 +207,65 @@ export class Rig implements RigInterface {
   }
 
   async disconnect(): Promise<void> {
-    await this.client.disconnect();
+    if (!this.session) {
+      return;
+    }
+
+    await this.session.disconnect();
+    this.session = null;
+    this.transportStatus = {
+      ...this.transportStatus,
+      connected: false
+    };
+    this.emitStatus();
   }
 
   public async connectWithSession(session: SerialSession): Promise<void> {
-    await this.client.connectWithSession(session);
+    if (this.session) {
+      throw new Error("Rig is already connected.");
+    }
+
+    this.session = session;
+    this.transportStatus = {
+      protocolFamily: this.transportStatus.protocolFamily,
+      modelId: this.transportStatus.modelId,
+      connected: true,
+      bytesTx: 0,
+      bytesRx: 0
+    };
+
+    this.session.on((data) => {
+      this.transportStatus = {
+        ...this.transportStatus,
+        bytesRx: this.transportStatus.bytesRx + data.byteLength
+      };
+
+      if (this.protocolAdapter) {
+        const responses = this.protocolAdapter.decodeIncoming(data);
+        for (const response of responses) {
+          this.emitResponse(response);
+        }
+      }
+
+      this.emitStatus();
+    });
+
+    this.emitStatus();
   }
 
   async getStatus(): Promise<RigStatus> {
-    const transport = this.client.getStatus();
+    const transport = this.getTransportStatus();
     if (!transport.connected) {
       return transport;
     }
 
     const control = this.getControlAdapter();
 
-    const rxVfo = await control.getRxVfo!(this.client);
-    const txVfo = await control.getTxVfo!(this.client);
-    const frequencyAHz = await control.getFrequency!(this.client, "A");
-    const frequencyBHz = await control.getFrequency!(this.client, "B");
-    const mode = await control.getModulationMode!(this.client);
+    const rxVfo = await control.getRxVfo!(this.protocolClient);
+    const txVfo = await control.getTxVfo!(this.protocolClient);
+    const frequencyAHz = await control.getFrequency!(this.protocolClient, "A");
+    const frequencyBHz = await control.getFrequency!(this.protocolClient, "B");
+    const mode = await control.getModulationMode!(this.protocolClient);
 
     return {
       ...transport,
@@ -209,12 +277,15 @@ export class Rig implements RigInterface {
     };
   }
 
-  onStatus(listener: StatusListener): void {
-    this.client.on("status", listener);
+  onStatus(listener: RigStatusListener): void {
+    this.statusListeners.push(listener);
   }
 
-  offStatus(listener: StatusListener): void {
-    this.client.off("status", listener);
+  offStatus(listener: RigStatusListener): void {
+    const idx = this.statusListeners.indexOf(listener);
+    if (idx !== -1) {
+      this.statusListeners.splice(idx, 1);
+    }
   }
 
   onResponse(listener: RigResponseListener): void {
@@ -240,7 +311,7 @@ export class Rig implements RigInterface {
   }
 
   async sendCat(code: string, args?: string[]): Promise<{ success: true }> {
-    await this.client.sendCommand({ code, args });
+    await this.sendCommand({ code, args });
     this.emitResult({
       operation: "sendCat",
       success: true,
@@ -253,7 +324,7 @@ export class Rig implements RigInterface {
   }
 
   async queryCat(code: string, args?: string[]): Promise<CatResponse> {
-    const response = await this.client.queryCommand({ code, args });
+    const response = await this.queryCommand({ code, args });
     this.emitResult({
       operation: "queryCat",
       success: true,
@@ -272,7 +343,7 @@ export class Rig implements RigInterface {
     options: SetFreqOptions = {}
   ): Promise<SetFreqResult> {
     const control = this.getControlAdapter();
-    await control.setFrequency!(this.client, vfo, hz);
+    await control.setFrequency!(this.protocolClient, vfo, hz);
 
     if (options.verify === false) {
       return {
@@ -283,7 +354,7 @@ export class Rig implements RigInterface {
       };
     }
 
-    const appliedHz = await control.getFrequency!(this.client, vfo);
+    const appliedHz = await control.getFrequency!(this.protocolClient, vfo);
     const result = {
       vfo,
       requestedHz: hz,
@@ -303,19 +374,19 @@ export class Rig implements RigInterface {
   }
 
   async getFreq(vfo: VfoId = "A"): Promise<number> {
-    return this.getControlAdapter().getFrequency!(this.client, vfo);
+    return this.getControlAdapter().getFrequency!(this.protocolClient, vfo);
   }
 
   async setMode(mode: ModulationMode): Promise<void> {
-    await this.getControlAdapter().setModulationMode!(this.client, mode);
+    await this.getControlAdapter().setModulationMode!(this.protocolClient, mode);
   }
 
   async getMode(): Promise<ModulationMode> {
-    return this.getControlAdapter().getModulationMode!(this.client);
+    return this.getControlAdapter().getModulationMode!(this.protocolClient);
   }
 
   async setRxVfo(vfo: VfoId): Promise<void> {
-    await this.getControlAdapter().setRxVfo!(this.client, vfo);
+    await this.getControlAdapter().setRxVfo!(this.protocolClient, vfo);
   }
 
   async getRxVfo(): Promise<VfoId> {
@@ -326,11 +397,11 @@ export class Rig implements RigInterface {
         return splitControl.splitRxVfo ?? "A";
       }
     }
-    return this.getControlAdapter().getRxVfo!(this.client);
+    return this.getControlAdapter().getRxVfo!(this.protocolClient);
   }
 
   async setTxVfo(vfo: VfoId): Promise<void> {
-    await this.getControlAdapter().setTxVfo!(this.client, vfo);
+    await this.getControlAdapter().setTxVfo!(this.protocolClient, vfo);
   }
 
   async getTxVfo(): Promise<VfoId> {
@@ -341,15 +412,22 @@ export class Rig implements RigInterface {
         return splitControl.splitTxVfo ?? "B";
       }
     }
-    return this.getControlAdapter().getTxVfo!(this.client);
+    return this.getControlAdapter().getTxVfo!(this.protocolClient);
   }
 
-  async tx(options?: TxSwitchOptions): Promise<void> {
-    await this.getControlAdapter().switchToTx!(this.client, options);
+  async setPtt(on: boolean, options?: TxSwitchOptions): Promise<void> {
+    if (on) {
+      await this.getControlAdapter().switchToTx!(this.protocolClient, options);
+      this.lastPttState = true;
+      return;
+    }
+
+    await this.getControlAdapter().switchToRx!(this.protocolClient);
+    this.lastPttState = false;
   }
 
-  async rx(): Promise<void> {
-    await this.getControlAdapter().switchToRx!(this.client);
+  async getPtt(): Promise<boolean> {
+    return this.lastPttState;
   }
 
   async get(functionName: RigFunction, options?: { vfo?: VfoId }): Promise<unknown> {
@@ -362,8 +440,8 @@ export class Rig implements RigInterface {
         return this.getRxVfo();
       case "txVfo":
         return this.getTxVfo();
-      case "tx":
-      case "rx":
+      case "ptt":
+        return this.getPtt();
       case "dataSource":
         throw new Error(`Function '${functionName}' is write-only.`);
       default:
@@ -405,12 +483,16 @@ export class Rig implements RigInterface {
         await this.setTxVfo(data);
         return;
       }
-      case "tx": {
-        await this.tx(options?.source ? ({ source: options.source } as TxSwitchOptions) : undefined);
-        return;
-      }
-      case "rx": {
-        await this.rx();
+      case "ptt": {
+        if (typeof data !== "boolean") {
+          throw new Error("set('ptt') requires boolean data.");
+        }
+        await this.setPtt(
+          data,
+          data && options?.source
+            ? ({ source: options.source } as TxSwitchOptions)
+            : undefined
+        );
         return;
       }
       case "dataSource": {
@@ -427,7 +509,7 @@ export class Rig implements RigInterface {
 
   private async querySplitModeValue(): Promise<string> {
     const command = this.modelFeatures?.splitControl?.command ?? "FT";
-    const response = await this.client.queryCommand({ code: command });
+    const response = await this.queryCommand({ code: command });
     const payload = response.payload?.text;
     if (typeof payload !== "string") {
       throw new Error(`Response for ${command} did not include text payload.`);
@@ -442,7 +524,7 @@ export class Rig implements RigInterface {
   }
 
   private getControlAdapter(): ProtocolAdapter {
-    const adapter = this.client.getProtocolAdapter();
+    const adapter = this.protocolAdapter;
     if (!adapter) {
       throw new Error(
         "Protocol adapter is not selected. Call Rig.create/connect with a family first."
@@ -468,5 +550,133 @@ export class Rig implements RigInterface {
     }
 
     return adapter;
+  }
+
+  private useProtocol(family: ProtocolFamily, model?: string): void {
+    const modelAdapter = model ? createModelAdapterByName(family, model) : undefined;
+    this.protocolAdapter = createProtocolAdapter({ family, modelAdapter });
+    this.transportStatus = {
+      ...this.transportStatus,
+      protocolFamily: family,
+      modelId: modelAdapter?.modelId
+    };
+    this.emitStatus();
+  }
+
+  protected resolveConnectSignalOptions(
+    options: Pick<RigConnectOptions, "rts" | "dtr"> = {}
+  ): { rts?: boolean; dtr?: boolean } {
+    const resolved: { rts?: boolean; dtr?: boolean } = {
+      rts: options.rts,
+      dtr: options.dtr
+    };
+
+    const modelPttSignal = this.modelFeatures?.ptt;
+    const modelSignals = this.modelFeatures?.signals;
+    const modelUsesRtsForPtt =
+      modelPttSignal === "rts" ||
+      modelSignals?.rts === "ptt-on" ||
+      modelSignals?.rts === "ptt-off";
+    const modelUsesDtrForPtt =
+      modelPttSignal === "dtr" ||
+      modelSignals?.dtr === "ptt-on" ||
+      modelSignals?.dtr === "ptt-off";
+
+    if (modelUsesRtsForPtt) {
+      resolved.rts = false;
+    }
+
+    if (modelUsesDtrForPtt) {
+      resolved.dtr = false;
+    }
+
+    return resolved;
+  }
+
+  private async sendBytes(data: Uint8Array): Promise<void> {
+    this.assertConnected();
+    await this.session!.writeBytes(data);
+    this.transportStatus = {
+      ...this.transportStatus,
+      bytesTx: this.transportStatus.bytesTx + data.byteLength
+    };
+    this.emitStatus();
+  }
+
+  private async sendCommand(command: CatCommand): Promise<void> {
+    this.assertConnected();
+    this.assertProtocolSelected();
+    const payload = this.protocolAdapter!.encodeCommand(command);
+    await this.sendBytes(payload);
+  }
+
+  private async queryCommand(
+    command: CatCommand,
+    options: QueryCommandOptions = {}
+  ): Promise<CatResponse> {
+    this.assertConnected();
+    this.assertProtocolSelected();
+
+    const timeoutMs = options.timeoutMs ?? 500;
+    const expectedCode = command.code.toUpperCase();
+
+    return new Promise<CatResponse>((resolve, reject) => {
+      const listener: RigResponseListener = (response) => {
+        const matched = options.match
+          ? options.match(response)
+          : response.command === expectedCode;
+
+        if (!matched) {
+          return;
+        }
+
+        clearTimeout(timer);
+        this.offResponse(listener);
+        resolve(response);
+      };
+
+      const timer = setTimeout(() => {
+        this.offResponse(listener);
+        reject(new Error(`CAT query timed out for command ${command.code}.`));
+      }, timeoutMs);
+
+      this.onResponse(listener);
+      this.sendCommand(command).catch((error) => {
+        clearTimeout(timer);
+        this.offResponse(listener);
+        reject(error);
+      });
+    });
+  }
+
+  private getTransportStatus(): RigTransportStatus {
+    return { ...this.transportStatus };
+  }
+
+  private assertConnected(): void {
+    if (!this.session) {
+      throw new Error("Rig is not connected.");
+    }
+  }
+
+  private assertProtocolSelected(): void {
+    if (!this.protocolAdapter) {
+      throw new Error(
+        "Protocol adapter is not selected. Call Rig.create/connect with a family first."
+      );
+    }
+  }
+
+  private emitStatus(): void {
+    const snapshot = this.getTransportStatus();
+    for (const listener of this.statusListeners) {
+      queueMicrotask(() => listener(snapshot));
+    }
+  }
+
+  private emitResponse(response: CatResponse): void {
+    for (const listener of this.responseListeners) {
+      queueMicrotask(() => listener(response));
+    }
   }
 }

@@ -45,6 +45,8 @@ export class RigNode extends Rig {
           ? false
           : undefined;
 
+    const signalOptions = this.resolveConnectSignalOptions(options);
+
     const port = new SerialPort({
       path: portPath,
       baudRate,
@@ -70,12 +72,12 @@ export class RigNode extends Rig {
       });
     });
 
-    if (options.rts !== undefined || options.dtr !== undefined) {
+    if (signalOptions.rts !== undefined || signalOptions.dtr !== undefined) {
       await new Promise<void>((resolve, reject) => {
         port.set(
           {
-            rts: options.rts,
-            dtr: options.dtr
+            rts: signalOptions.rts,
+            dtr: signalOptions.dtr
           },
           (error) => {
             if (error) {

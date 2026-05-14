@@ -100,7 +100,7 @@ await rig.connect(115200);
 
 await rig.setFreq(18100000);
 await rig.setMode("USB");
-await rig.tx();
+await rig.setPtt(true);
 ```
 
 You can also set modem control lines during connect when a rig requires fixed
@@ -116,7 +116,7 @@ await rig.connect(115200, {
 Core concept:
 
 - `Rig` owns the serial session and protocol adapter selection.
-- `Rig` exposes straightforward methods (`getFreq`, `setFreq`, `getMode`, `setMode`, `tx`, `rx`).
+- `Rig` exposes straightforward methods (`getFreq`, `setFreq`, `getMode`, `setMode`, `setPtt`, `getPtt`).
 - `Rig` also exposes generic `get(...)` and `set(...)` hooks for future family/model extensions.
 
 Model-specific behavior is described in YAML profile files and consumed by model
@@ -192,12 +192,15 @@ Tests with TS-590 are in the pipeline.
 - RX VFO select (`setRxVfo`, `getRxVfo`)
 - VFO A/B frequency (`setFrequency`, `getFrequency`)
 - modulation mode (`setModulationMode`, `getModulationMode`)
-- TX/RX switch (`switchToTx`, `switchToRx`)
+- PTT control (`setPtt`, `getPtt`)
 
 Current baseline command mapping is implemented for the Kenwood family.
 For model-specific TX source selection (for rigs with multiple TX audio paths),
 call:
 
 ```typescript
-await rig.tx({ source: "USB" });
+await rig.setPtt(true, { source: "USB" });
 ```
+
+If the active protocol does not provide a direct TX/RX state readback, `getPtt()`
+returns the last value applied through `setPtt(...)`.

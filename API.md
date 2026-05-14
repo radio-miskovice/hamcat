@@ -3,7 +3,7 @@
 ## Entry Points
 
 - `hamcat` (universal): browser + node exports
-- `hamcat/browser`: browser-safe exports (no `RigNode`, no `NodeHamcatClient`, no `createNodeSerialSession`)
+- `hamcat/browser`: browser-safe exports (no `RigNode`, no `createNodeSerialSession`)
 - `hamcat/node`: currently resolves to the same runtime as `hamcat`, works both with browser and nodejs
 
 ## Top-Level Classes and Types
@@ -21,8 +21,8 @@ interface RigInterface {
 	disconnect(): Promise<void>;
 	getStatus(): Promise<RigStatus>;
 
-	onStatus(listener: StatusListener): void;
-	offStatus(listener: StatusListener): void;
+	onStatus(listener: RigStatusListener): void;
+	offStatus(listener: RigStatusListener): void;
 	onResponse(listener: RigResponseListener): void;
 	offResponse(listener: RigResponseListener): void;
 	onResult(listener: RigResultListener): void;
@@ -41,9 +41,8 @@ interface RigInterface {
 	getRxVfo(): Promise<VfoId>;
 	setTxVfo(vfo: VfoId): Promise<void>;
 	getTxVfo(): Promise<VfoId>;
-
-	tx(options?: TxSwitchOptions): Promise<void>;
-	rx(): Promise<void>;
+	setPtt(on: boolean, options?: TxSwitchOptions): Promise<void>;
+	getPtt(): Promise<boolean>;
 
 	listModels(options?: RigListModelsOptions): RigListedModel[];
 
@@ -71,8 +70,8 @@ class Rig {
 	disconnect(): Promise<void>;
 	getStatus(): Promise<RigStatus>;
 
-	onStatus(listener: StatusListener): void;
-	offStatus(listener: StatusListener): void;
+	onStatus(listener: RigStatusListener): void;
+	offStatus(listener: RigStatusListener): void;
 	onResponse(listener: RigResponseListener): void;
 	offResponse(listener: RigResponseListener): void;
 	onResult(listener: RigResultListener): void;
@@ -91,9 +90,8 @@ class Rig {
 	getRxVfo(): Promise<VfoId>;
 	setTxVfo(vfo: VfoId): Promise<void>;
 	getTxVfo(): Promise<VfoId>;
-
-	tx(options?: TxSwitchOptions): Promise<void>;
-	rx(): Promise<void>;
+	setPtt(on: boolean, options?: TxSwitchOptions): Promise<void>;
+	getPtt(): Promise<boolean>;
 	listModels(options?: RigListModelsOptions): RigListedModel[];
 
 	get(functionName: RigFunction, options?: { vfo?: VfoId }): Promise<unknown>;
@@ -108,6 +106,7 @@ class Rig {
 Notes:
 - `Rig` delegates baseline control operations to the selected protocol adapter.
 - If a family adapter does not implement the baseline operation set, `Rig` methods throw.
+- `getPtt()` returns protocol readback when available; otherwise it returns the last state set by `setPtt(...)`.
 
 ### `RigNode`
 
@@ -135,17 +134,6 @@ class RigNode extends Rig {
 }
 ```
 
-### `NodeHamcatClient`
-
-Lower-level node client helper (in addition to high-level `RigNode`).
-
-```ts
-class NodeHamcatClient extends HamcatClient {
-	static create(): NodeHamcatClient;
-	connectWithSerialPort(portPath: string, baudRate?: number): Promise<void>;
-}
-```
-
 ## High-Level Rig Types
 
 ```ts
@@ -160,7 +148,15 @@ interface RigConnectOptions {
 	requestOptions?: SerialPortRequestOptions;
 }
 
-interface RigStatus extends HamcatStatus {
+interface RigTransportStatus {
+	connected: boolean;
+	bytesTx: number;
+	bytesRx: number;
+	protocolFamily?: "kenwood" | "yaesu" | "icom";
+	modelId?: string;
+}
+
+interface RigStatus extends RigTransportStatus {
 	rxVfo?: VfoId;
 	txVfo?: VfoId;
 	frequencyAHz?: number;
@@ -188,14 +184,14 @@ interface RigOperationResult {
 
 type RigResponseListener = (response: CatResponse) => void;
 type RigResultListener = (result: RigOperationResult) => void;
+type RigStatusListener = (status: RigTransportStatus) => void;
 
 type RigFunction =
 	| "freq"
 	| "mode"
 	| "rxVfo"
 	| "txVfo"
-	| "tx"
-	| "rx"
+	| "ptt"
 	| "dataSource";
 
 interface RigListModelsOptions {
@@ -389,6 +385,8 @@ interface RigSignalFeatures {
 	dtr?: SignalFunction;
 }
 
+type RigPttSignal = "rts" | "dtr";
+
 type VfoSplitPattern = "same-band" | "any";
 
 interface RigDataSourceFeatures {
@@ -420,6 +418,7 @@ interface RigModelFeatures {
 	family: ProtocolFamily;
 	model: string;
 	modelId: string;
+	ptt?: RigPttSignal;
 	signals?: RigSignalFeatures;
 	vfoSplitPattern?: VfoSplitPattern;
 	splitControl?: RigSplitControlFeatures;

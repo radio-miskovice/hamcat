@@ -38,6 +38,11 @@ $defs:
       - kenwood
       - yaesu
       - icom
+  pttSignal:
+    type: string
+    enum:
+      - rts
+      - dtr
   signalFunction:
     type: string
     enum:
@@ -143,6 +148,8 @@ $defs:
       displayName:
         type: string
         minLength: 1
+      ptt:
+        $ref: "#/$defs/pttSignal"
       signals:
         $ref: "#/$defs/signals"
       vfoSplitPattern:

@@ -93,7 +93,7 @@ function init(): void {
   setFreqBBtn.addEventListener("click", () => runAction(setFreqBOnly));
   setModeBtn.addEventListener("click", () => runAction(setModeOnly));
   txBtn.addEventListener("click", () => runAction(switchTx));
-  rxBtn.addEventListener("click", () => runAction(() => getRig().rx()));
+  rxBtn.addEventListener("click", () => runAction(() => getRig().setPtt(false)));
   macroCqBtn.addEventListener("click", () => runAction(runMacroCq));
   macroSplitBtn.addEventListener("click", () => runAction(runMacroSplit));
   saveProfileBtn.addEventListener("click", () => runAction(saveCurrentProfile));
@@ -234,12 +234,12 @@ async function switchTx(): Promise<void> {
 
   const source = txSourceSelect.value.trim();
   if (source) {
-    await getRig().tx({ source });
+    await getRig().setPtt(true, { source });
     appendLog(`Switched to TX with source ${source}.`);
     return;
   }
 
-  await getRig().tx();
+  await getRig().setPtt(true);
   appendLog("Switched to TX.");
 }
 
@@ -298,7 +298,7 @@ async function runMacroCq(): Promise<void> {
   await setRxVfoOnly();
   await setTxVfoOnly();
   await setModeOnly();
-  await getRig().tx();
+  await getRig().setPtt(true);
   appendLog("Macro CQ setup done: simplex TX on VFO A.");
 }
 
@@ -308,7 +308,7 @@ async function runMacroSplit(): Promise<void> {
   txVfoSelect.value = "B";
   await setRxVfoOnly();
   await setTxVfoOnly();
-  await getRig().rx();
+  await getRig().setPtt(false);
   appendLog("Macro split setup done: RX=A, TX=B.");
 }
 

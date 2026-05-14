@@ -24,6 +24,7 @@ export interface RigModelCatalogEntry {
   model?: string;
   vendor?: string;
   displayName?: string;
+  ptt?: RigPttSignal;
   signals?: RigSignalFeatures;
   vfoSplitPattern?: VfoSplitPattern;
   splitControl?: RigSplitControlFeatures;
@@ -46,6 +47,8 @@ export type SignalFunction =
   | "flow"
   | "on"
   | "off";
+
+export type RigPttSignal = "rts" | "dtr";
 
 export interface RigSignalFeatures {
   rts?: SignalFunction;
@@ -87,6 +90,7 @@ export interface RigModelFeatures {
   sameAs?: string;
   vendor?: string;
   displayName?: string;
+  ptt?: RigPttSignal;
   signals?: RigSignalFeatures;
   vfoSplitPattern?: VfoSplitPattern;
   splitControl?: RigSplitControlFeatures;

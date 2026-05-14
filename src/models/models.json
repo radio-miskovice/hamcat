@@ -138,10 +138,7 @@
       "model": "tx500",
       "vendor": "labs599",
       "displayName": "TX-500",
-      "signals": {
-        "rts": "ptt-on",
-        "dtr": "none"
-      },
+      "ptt": "rts",
       "vfoSplitPattern": "same-band"
     }
   }

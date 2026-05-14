@@ -42,6 +42,10 @@
       "type": "string",
       "enum": ["kenwood", "yaesu", "icom"]
     },
+    "pttSignal": {
+      "type": "string",
+      "enum": ["rts", "dtr"]
+    },
     "signalFunction": {
       "type": "string",
       "enum": ["none", "ptt-on", "ptt-off", "flow", "on", "off"]
@@ -170,6 +174,9 @@
         "displayName": {
           "type": "string",
           "minLength": 1
+        },
+        "ptt": {
+          "$ref": "#/$defs/pttSignal"
         },
         "signals": {
           "$ref": "#/$defs/signals"

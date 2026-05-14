@@ -18,7 +18,6 @@ export {
   autoConnectWebSerial
 } from "./serial-session";
 export { createNodeSerialSession } from "./node-session";
-export { NodeHamcatClient } from "./core-node";
 
 import { Rig } from "./rig";
 import { RigNode } from "./rig-node";

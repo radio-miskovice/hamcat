@@ -1,47 +1,82 @@
 import { describe, expect, it } from "vitest";
-import { HamcatClient } from "../src/core";
 import { Rig } from "../src/rig";
 import {
   createProtocolAdapter,
   type CatCommand,
+  type ProtocolControlClient,
   type ModelProtocolAdapter,
   type ProtocolAdapter
 } from "../src/protocol";
 import type { SerialSession } from "../src/serial-session";
 
-describe("HamcatClient", () => {
-  it("starts disconnected", () => {
-    const client = new HamcatClient();
-    expect(client.getStatus().connected).toBe(false);
+describe("Rig transport status", () => {
+  it("starts disconnected", async () => {
+    const rig = Rig.create("kenwood");
+    const status = await rig.getStatus();
+    expect(status.connected).toBe(false);
   });
 
-  it("stores selected protocol family in status", () => {
-    const client = new HamcatClient();
-    client.useProtocol("kenwood");
-    expect(client.getStatus().protocolFamily).toBe("kenwood");
+  it("stores selected protocol family in status", async () => {
+    const rig = Rig.create("kenwood");
+    const status = await rig.getStatus();
+    expect(status.protocolFamily).toBe("kenwood");
   });
 
-  it("maps simplified model string to model adapter", () => {
-    const client = new HamcatClient();
-    client.useProtocol("kenwood", "qmx");
-    expect(client.getStatus().modelId).toBe("qrplabs.qmx");
+  it("maps simplified model string to model adapter", async () => {
+    const rig = Rig.create("kenwood", "qmx");
+    const status = await rig.getStatus();
+    expect(status.modelId).toBe("qrplabs.qmx");
   });
 
-  it("maps catalog-only model string to generic model adapter", () => {
-    const client = new HamcatClient();
-    client.useProtocol("kenwood", "ts480");
-    expect(client.getStatus().modelId).toBe("kenwood.ts480");
+  it("maps catalog-only model string to generic model adapter", async () => {
+    const rig = Rig.create("kenwood", "ts480");
+    const status = await rig.getStatus();
+    expect(status.modelId).toBe("kenwood.ts480");
+  });
+
+  it("forces RTS low on connect when model uses RTS for PTT", () => {
+    const rig = Rig.create("kenwood", "tx500");
+    expect(
+      (
+        rig as unknown as {
+          resolveConnectSignalOptions: (options: { rts?: boolean; dtr?: boolean }) => {
+            rts?: boolean;
+            dtr?: boolean;
+          };
+        }
+      ).resolveConnectSignalOptions({ rts: true, dtr: true })
+    ).toEqual({
+      rts: false,
+      dtr: true
+    });
+  });
+
+  it("keeps connect signal options when model does not bind PTT to RTS/DTR", () => {
+    const rig = Rig.create("kenwood", "qmx");
+    expect(
+      (
+        rig as unknown as {
+          resolveConnectSignalOptions: (options: { rts?: boolean; dtr?: boolean }) => {
+            rts?: boolean;
+            dtr?: boolean;
+          };
+        }
+      ).resolveConnectSignalOptions({ rts: true, dtr: false })
+    ).toEqual({
+      rts: true,
+      dtr: false
+    });
   });
 });
 
 describe("Minimal control API", () => {
   it("supports get/set for vfo, frequency and mode on kenwood baseline", async () => {
     const session = new MockSerialSession();
-    const client = new HamcatClient();
-    client.useProtocol("kenwood");
-    await client.connectWithSession(session);
+    const rig = Rig.create("kenwood");
+    await rig.connectWithSession(session);
 
-    const control = getBaselineControlAdapter(client);
+    const control = getBaselineControlAdapter(rig);
+    const client = getProtocolClient(rig);
 
     await control.setRxVfo!(client, "B");
     await control.setTxVfo!(client, "A");
@@ -76,11 +111,11 @@ describe("Minimal control API", () => {
 
   it("requires model adapter when tx source is requested", async () => {
     const session = new MockSerialSession();
-    const client = new HamcatClient();
-    client.useProtocol("kenwood");
-    await client.connectWithSession(session);
+    const rig = Rig.create("kenwood");
+    await rig.connectWithSession(session);
 
-    const control = getBaselineControlAdapter(client);
+    const control = getBaselineControlAdapter(rig);
+    const client = getProtocolClient(rig);
     await expect(control.switchToTx!(client, { source: "USB" })).rejects.toThrow(
       "requires a model adapter"
     );
@@ -88,11 +123,11 @@ describe("Minimal control API", () => {
 
   it("uses TS-590 source-aware TX command", async () => {
     const session = new MockSerialSession();
-    const client = new HamcatClient();
-    client.useProtocol("kenwood", "ts590");
-    await client.connectWithSession(session);
+    const rig = Rig.create("kenwood", "ts590");
+    await rig.connectWithSession(session);
 
-    const control = getBaselineControlAdapter(client);
+    const control = getBaselineControlAdapter(rig);
+    const client = getProtocolClient(rig);
     await control.switchToTx!(client, { source: "USB" });
 
     expect(session.writes.at(-1)).toBe("TX1;");
@@ -100,22 +135,21 @@ describe("Minimal control API", () => {
 
   it("maps TS-590 data source command from feature profile", async () => {
     const session = new MockSerialSession();
-    const client = new HamcatClient();
-    client.useProtocol("kenwood", "ts590");
-    await client.connectWithSession(session);
+    const rig = Rig.create("kenwood", "ts590");
+    await rig.connectWithSession(session);
 
-    await client.sendCommand({ code: "DS", args: ["USB"] });
+    await rig.sendCat("DS", ["USB"]);
 
     expect(session.writes.at(-1)).toBe("EX06300001;");
   });
 
   it("uses QMX plain TX command even when source is requested", async () => {
     const session = new MockSerialSession();
-    const client = new HamcatClient();
-    client.useProtocol("kenwood", "qmx");
-    await client.connectWithSession(session);
+    const rig = Rig.create("kenwood", "qmx");
+    await rig.connectWithSession(session);
 
-    const control = getBaselineControlAdapter(client);
+    const control = getBaselineControlAdapter(rig);
+    const client = getProtocolClient(rig);
     await control.switchToTx!(client, { source: "USB" });
 
     expect(session.writes.at(-1)).toBe("TX;");
@@ -177,19 +211,18 @@ describe("Rig facade", () => {
     expect(rig.listModels({ model: "qmx" }).map((entry) => entry.modelId)).toContain("qrplabs.qmx");
   });
 
-  it("exposes a compact control surface over HamcatClient", async () => {
+  it("exposes a compact control surface over Rig transport/protocol core", async () => {
     const session = new MockSerialSession();
     const rig = Rig.create("kenwood", "qmx");
 
-    const internalClient = (rig as unknown as { client: HamcatClient }).client;
-    await internalClient.connectWithSession(session);
+    await rig.connectWithSession(session);
 
     await rig.setRxVfo("A");
     await rig.setTxVfo("A");
     await rig.setFreq(18100000, "A", { verify: false });
     await rig.setMode("USB");
-    await rig.tx();
-    await rig.rx();
+    await rig.setPtt(true);
+    await rig.setPtt(false);
 
     expect(session.writes.slice(0, 6)).toEqual([
       "FR0;",
@@ -199,6 +232,19 @@ describe("Rig facade", () => {
       "TX;",
       "RX;"
     ]);
+  });
+
+  it("returns last set PTT state when protocol has no PTT readback", async () => {
+    const session = new MockSerialSession();
+    const rig = Rig.create("kenwood", "qmx");
+
+    await rig.connectWithSession(session);
+
+    await expect(rig.getPtt()).resolves.toBe(false);
+    await rig.setPtt(true);
+    await expect(rig.getPtt()).resolves.toBe(true);
+    await rig.setPtt(false);
+    await expect(rig.getPtt()).resolves.toBe(false);
   });
 
   it("reports adjusted frequency when rig does not accept requested value", async () => {
@@ -216,8 +262,7 @@ describe("Rig facade", () => {
       throw new Error(`Timed out waiting for write ${expected}.`);
     };
 
-    const internalClient = (rig as unknown as { client: HamcatClient }).client;
-    await internalClient.connectWithSession(session);
+    await rig.connectWithSession(session);
 
     const setPromise = rig.setFreq(18100000, "A");
     await waitForLastWrite("FA;");
@@ -241,8 +286,7 @@ describe("Rig facade", () => {
     const session = new MockSerialSession();
     const rig = Rig.create("kenwood", "qmx");
 
-    const internalClient = (rig as unknown as { client: HamcatClient }).client;
-    await internalClient.connectWithSession(session);
+    await rig.connectWithSession(session);
 
     const responses: string[] = [];
     const results: string[] = [];
@@ -303,10 +347,14 @@ class MockSerialSession implements SerialSession {
   }
 }
 
-function getBaselineControlAdapter(client: HamcatClient): ProtocolAdapter {
-  const adapter = client.getProtocolAdapter();
+function getBaselineControlAdapter(rig: Rig): ProtocolAdapter {
+  const adapter = (rig as unknown as { getControlAdapter: () => ProtocolAdapter }).getControlAdapter();
   if (!adapter) {
     throw new Error("Expected protocol adapter to be selected.");
   }
   return adapter;
+}
+
+function getProtocolClient(rig: Rig): ProtocolControlClient {
+  return (rig as unknown as { protocolClient: ProtocolControlClient }).protocolClient;
 }
