@@ -132,6 +132,59 @@ export class KenwoodProtocolAdapter extends BaseTextFamilyAdapter {
     await client.sendCommand({ code: "RX" });
   }
 
+  async setSplit(client: ProtocolControlClient, on: boolean): Promise<void> {
+    this.assertKenwoodFamily(client);
+
+    const splitActionCommand = this.getSplitActionCommand(client);
+    if (splitActionCommand) {
+      const raw = on ? splitActionCommand.on : splitActionCommand.off;
+      await client.sendCommand({ code: "", raw });
+      return;
+    }
+
+    const rxVfo = await this.getRxVfo(client);
+    if (!on) {
+      await this.setTxVfo(client, rxVfo);
+      return;
+    }
+
+    const txVfo: VfoId = rxVfo === "A" ? "B" : "A";
+    const freqA = await this.getFrequency(client, "A");
+    const freqB = await this.getFrequency(client, "B");
+
+    await this.setTxVfo(client, txVfo);
+    if (freqA === freqB) {
+      const splitTxFreq = (txVfo === "A" ? freqA : freqB) + 1000;
+      await this.setFrequency(client, txVfo, splitTxFreq);
+    }
+  }
+
+  async getSplit(client: ProtocolControlClient): Promise<boolean> {
+    this.assertKenwoodFamily(client);
+
+    const splitActionCommand = this.getSplitActionCommand(client);
+    if (splitActionCommand?.get) {
+      const code = this.extractCommandCode(splitActionCommand.get);
+      const response = await client.queryCommand({
+        code,
+        raw: splitActionCommand.get
+      });
+
+      const payload = this.readPayloadText(response).trim().toUpperCase();
+      if (["1", "ON", "TRUE", "T", "YES", "Y"].includes(payload)) {
+        return true;
+      }
+      if (["0", "OFF", "FALSE", "F", "NO", "N"].includes(payload)) {
+        return false;
+      }
+      throw new Error(`Unexpected split-state payload: ${payload || "<empty>"}`);
+    }
+
+    const rxVfo = await this.getRxVfo(client);
+    const txVfo = await this.getTxVfo(client);
+    return rxVfo !== txVfo;
+  }
+
   private assertKenwoodFamily(client: ProtocolControlClient): void {
     const status = client.getStatus();
     if (status.protocolFamily !== "kenwood") {
@@ -171,5 +224,20 @@ export class KenwoodProtocolAdapter extends BaseTextFamilyAdapter {
       throw new Error("Response does not contain text payload.");
     }
     return value;
+  }
+
+  private getSplitActionCommand(
+    client: ProtocolControlClient
+  ): { on: string; off: string; get?: string } | undefined {
+    const splitAction = client.getStatus().splitAction;
+    return splitAction?.command;
+  }
+
+  private extractCommandCode(raw: string): string {
+    const match = /^\s*([A-Za-z]{2})/.exec(raw);
+    if (!match) {
+      throw new Error(`Split action query command must start with a CAT command code: '${raw}'`);
+    }
+    return match[1].toUpperCase();
   }
 }

@@ -19,15 +19,12 @@ hamCatModels:
     signals:
       rts: none
       dtr: none
+    splitAction:
+      command:
+        on: SP1;
+        off: SP0;
+        get: SP;
     vfoSplitPattern: same-band
-    splitControl:
-      kind: mode-flag
-      command: FT
-      splitValue: "2"
-      vfoAValue: "0"
-      vfoBValue: "1"
-      splitRxVfo: A
-      splitTxVfo: B
 
   kenwood.ts590:
     protocol: kenwood

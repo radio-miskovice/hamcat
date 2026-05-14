@@ -27,6 +27,7 @@ export interface RigModelCatalogEntry {
   ptt?: RigPttSignal;
   signals?: RigSignalFeatures;
   vfoSplitPattern?: VfoSplitPattern;
+  splitAction?: RigSplitActionFeatures;
   splitControl?: RigSplitControlFeatures;
   txSourceMap?: Record<string, string>;
   extra?: RigExtraFeatures;
@@ -72,6 +73,14 @@ export interface RigSplitControlFeatures {
   splitTxVfo?: "A" | "B";
 }
 
+export interface RigSplitActionFeatures {
+  command: {
+    on: string;
+    off: string;
+    get: string;
+  };
+}
+
 export interface RigExtraFeature<T = unknown> {
   hint: string;
   value: T;
@@ -93,6 +102,7 @@ export interface RigModelFeatures {
   ptt?: RigPttSignal;
   signals?: RigSignalFeatures;
   vfoSplitPattern?: VfoSplitPattern;
+  splitAction?: RigSplitActionFeatures;
   splitControl?: RigSplitControlFeatures;
   txSourceMap?: Record<string, string>;
   extra?: RigExtraFeatures;

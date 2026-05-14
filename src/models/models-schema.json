@@ -118,6 +118,32 @@
         }
       ]
     },
+    "splitAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command"],
+      "properties": {
+        "command": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["on", "off", "get"],
+          "properties": {
+            "on": {
+              "type": "string",
+              "minLength": 1
+            },
+            "off": {
+              "type": "string",
+              "minLength": 1
+            },
+            "get": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
     "extraFeature": {
       "type": "object",
       "additionalProperties": false,
@@ -197,6 +223,9 @@
         },
         "splitControl": {
           "$ref": "#/$defs/splitControl"
+        },
+        "splitAction": {
+          "$ref": "#/$defs/splitAction"
         },
         "extra": {
           "type": "object",

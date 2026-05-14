@@ -41,6 +41,8 @@ interface RigInterface {
 	getRxVfo(): Promise<VfoId>;
 	setTxVfo(vfo: VfoId): Promise<void>;
 	getTxVfo(): Promise<VfoId>;
+	setSplit(on: boolean): Promise<void>;
+	getSplit(): Promise<boolean>;
 	setPtt(on: boolean, options?: TxSwitchOptions): Promise<void>;
 	getPtt(): Promise<boolean>;
 
@@ -90,6 +92,8 @@ class Rig {
 	getRxVfo(): Promise<VfoId>;
 	setTxVfo(vfo: VfoId): Promise<void>;
 	getTxVfo(): Promise<VfoId>;
+	setSplit(on: boolean): Promise<void>;
+	getSplit(): Promise<boolean>;
 	setPtt(on: boolean, options?: TxSwitchOptions): Promise<void>;
 	getPtt(): Promise<boolean>;
 	listModels(options?: RigListModelsOptions): RigListedModel[];
@@ -191,6 +195,7 @@ type RigFunction =
 	| "mode"
 	| "rxVfo"
 	| "txVfo"
+	| "split"
 	| "ptt"
 	| "dataSource";
 
@@ -274,6 +279,8 @@ interface MinimalCatControl {
 	getTxVfo(): Promise<VfoId>;
 	setRxVfo(vfo: VfoId): Promise<void>;
 	getRxVfo(): Promise<VfoId>;
+	setSplit(on: boolean): Promise<void>;
+	getSplit(): Promise<boolean>;
 	setFrequency(vfo: VfoId, frequencyHz: number): Promise<void>;
 	getFrequency(vfo: VfoId): Promise<number>;
 	setModulationMode(mode: ModulationMode): Promise<void>;
@@ -311,6 +318,13 @@ interface ModelAdapterContext {
 interface ProtocolControlClientStatus {
 	protocolFamily?: ProtocolFamily;
 	modelId?: string;
+	splitAction?: {
+		command: {
+			on: string;
+			off: string;
+			get?: string;
+		};
+	};
 }
 
 interface ProtocolControlClient {
@@ -339,6 +353,8 @@ interface ProtocolAdapter {
 	getFrequency?(client: ProtocolControlClient, vfo: VfoId): Promise<number>;
 	setModulationMode?(client: ProtocolControlClient, mode: ModulationMode): Promise<void>;
 	getModulationMode?(client: ProtocolControlClient): Promise<ModulationMode>;
+	setSplit?(client: ProtocolControlClient, on: boolean): Promise<void>;
+	getSplit?(client: ProtocolControlClient): Promise<boolean>;
 	switchToTx?(client: ProtocolControlClient, options?: TxSwitchOptions): Promise<void>;
 	switchToRx?(client: ProtocolControlClient): Promise<void>;
 }
@@ -404,6 +420,14 @@ interface RigSplitControlFeatures {
 	splitTxVfo?: "A" | "B";
 }
 
+interface RigSplitActionFeatures {
+	command: {
+		on: string;
+		off: string;
+		get: string;
+	};
+}
+
 interface RigExtraFeature<T = unknown> {
 	hint: string;
 	value: T;
@@ -421,6 +445,7 @@ interface RigModelFeatures {
 	ptt?: RigPttSignal;
 	signals?: RigSignalFeatures;
 	vfoSplitPattern?: VfoSplitPattern;
+	splitAction?: RigSplitActionFeatures;
 	splitControl?: RigSplitControlFeatures;
 	txSourceMap?: Record<string, string>;
 	extra?: RigExtraFeatures;

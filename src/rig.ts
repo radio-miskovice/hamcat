@@ -79,6 +79,7 @@ export type RigFunction =
   | "mode"
   | "rxVfo"
   | "txVfo"
+  | "split"
   | "ptt"
   | "dataSource";
 
@@ -108,6 +109,8 @@ export interface RigInterface {
   getRxVfo(): Promise<VfoId>;
   setTxVfo(vfo: VfoId): Promise<void>;
   getTxVfo(): Promise<VfoId>;
+  setSplit(on: boolean): Promise<void>;
+  getSplit(): Promise<boolean>;
   setPtt(on: boolean, options?: TxSwitchOptions): Promise<void>;
   getPtt(): Promise<boolean>;
 
@@ -129,6 +132,8 @@ export class Rig implements RigInterface {
     bytesTx: 0,
     bytesRx: 0
   };
+  private lastRxVfo: VfoId = "A";
+  private lastTxVfo: VfoId = "A";
 
   private readonly modelFeatures: RigModelFeatures | null;
   private lastPttState = false;
@@ -140,7 +145,10 @@ export class Rig implements RigInterface {
   private readonly protocolClient: ProtocolControlClient = {
     sendCommand: (command) => this.sendCommand(command),
     queryCommand: (command) => this.queryCommand(command),
-    getStatus: () => this.getTransportStatus()
+    getStatus: () => ({
+      ...this.getTransportStatus(),
+      splitAction: this.modelFeatures?.splitAction
+    })
   };
 
   protected constructor(
@@ -387,6 +395,8 @@ export class Rig implements RigInterface {
 
   async setRxVfo(vfo: VfoId): Promise<void> {
     await this.getControlAdapter().setRxVfo!(this.protocolClient, vfo);
+    this.lastRxVfo = vfo;
+    await this.applyModelSplitAction();
   }
 
   async getRxVfo(): Promise<VfoId> {
@@ -394,14 +404,20 @@ export class Rig implements RigInterface {
     if (splitControl?.kind === "mode-flag") {
       const value = await this.querySplitModeValue();
       if (value === splitControl.splitValue) {
-        return splitControl.splitRxVfo ?? "A";
+        const resolved = splitControl.splitRxVfo ?? "A";
+        this.lastRxVfo = resolved;
+        return resolved;
       }
     }
-    return this.getControlAdapter().getRxVfo!(this.protocolClient);
+    const resolved = await this.getControlAdapter().getRxVfo!(this.protocolClient);
+    this.lastRxVfo = resolved;
+    return resolved;
   }
 
   async setTxVfo(vfo: VfoId): Promise<void> {
     await this.getControlAdapter().setTxVfo!(this.protocolClient, vfo);
+    this.lastTxVfo = vfo;
+    await this.applyModelSplitAction();
   }
 
   async getTxVfo(): Promise<VfoId> {
@@ -409,10 +425,14 @@ export class Rig implements RigInterface {
     if (splitControl?.kind === "mode-flag") {
       const value = await this.querySplitModeValue();
       if (value === splitControl.splitValue) {
-        return splitControl.splitTxVfo ?? "B";
+        const resolved = splitControl.splitTxVfo ?? "B";
+        this.lastTxVfo = resolved;
+        return resolved;
       }
     }
-    return this.getControlAdapter().getTxVfo!(this.protocolClient);
+    const resolved = await this.getControlAdapter().getTxVfo!(this.protocolClient);
+    this.lastTxVfo = resolved;
+    return resolved;
   }
 
   async setPtt(on: boolean, options?: TxSwitchOptions): Promise<void> {
@@ -430,6 +450,14 @@ export class Rig implements RigInterface {
     return this.lastPttState;
   }
 
+  async setSplit(on: boolean): Promise<void> {
+    await this.getControlAdapter().setSplit!(this.protocolClient, on);
+  }
+
+  async getSplit(): Promise<boolean> {
+    return this.getControlAdapter().getSplit!(this.protocolClient);
+  }
+
   async get(functionName: RigFunction, options?: { vfo?: VfoId }): Promise<unknown> {
     switch (functionName) {
       case "freq":
@@ -440,6 +468,8 @@ export class Rig implements RigInterface {
         return this.getRxVfo();
       case "txVfo":
         return this.getTxVfo();
+      case "split":
+        return this.getSplit();
       case "ptt":
         return this.getPtt();
       case "dataSource":
@@ -483,6 +513,13 @@ export class Rig implements RigInterface {
         await this.setTxVfo(data);
         return;
       }
+      case "split": {
+        if (typeof data !== "boolean") {
+          throw new Error("set('split') requires boolean data.");
+        }
+        await this.setSplit(data);
+        return;
+      }
       case "ptt": {
         if (typeof data !== "boolean") {
           throw new Error("set('ptt') requires boolean data.");
@@ -517,6 +554,19 @@ export class Rig implements RigInterface {
     return payload;
   }
 
+  private async applyModelSplitAction(): Promise<void> {
+    const splitAction = this.modelFeatures?.splitAction;
+    if (!splitAction) {
+      return;
+    }
+
+    const raw = this.lastRxVfo !== this.lastTxVfo
+      ? splitAction.command.on
+      : splitAction.command.off;
+
+    await this.sendCommand({ code: "", raw });
+  }
+
   private emitResult(result: RigOperationResult): void {
     for (const listener of this.resultListeners) {
       queueMicrotask(() => listener(result));
@@ -536,6 +586,8 @@ export class Rig implements RigInterface {
       typeof adapter.getTxVfo === "function" &&
       typeof adapter.setRxVfo === "function" &&
       typeof adapter.getRxVfo === "function" &&
+      typeof adapter.setSplit === "function" &&
+      typeof adapter.getSplit === "function" &&
       typeof adapter.setFrequency === "function" &&
       typeof adapter.getFrequency === "function" &&
       typeof adapter.setModulationMode === "function" &&

@@ -186,6 +186,80 @@ describe("Protocol adapters", () => {
     expect(text).toBe("EX001;");
     expect(adapter.modelId).toBe("elecraft-kx3");
   });
+
+  it("implements standard kenwood split with TX on opposite VFO and +1kHz bump when A/B are equal", async () => {
+    const adapter = createProtocolAdapter({ family: "kenwood" });
+
+    let rxVfo: "A" | "B" = "A";
+    let txVfo: "A" | "B" = "A";
+    let freqA = 14074000;
+    let freqB = 14074000;
+
+    const client: ProtocolControlClient = {
+      getStatus: () => ({ protocolFamily: "kenwood" }),
+      async sendCommand(command) {
+        const code = command.code.toUpperCase();
+        const arg = command.args?.[0] ?? "";
+        if (code === "FR") {
+          rxVfo = arg === "1" ? "B" : "A";
+          return;
+        }
+        if (code === "FT") {
+          txVfo = arg === "1" ? "B" : "A";
+          return;
+        }
+        if (code === "FA") {
+          freqA = Number.parseInt(arg, 10);
+          return;
+        }
+        if (code === "FB") {
+          freqB = Number.parseInt(arg, 10);
+        }
+      },
+      async queryCommand(command) {
+        const code = command.code.toUpperCase();
+        if (code === "FR") {
+          return {
+            family: "kenwood",
+            raw: `FR${rxVfo === "A" ? "0" : "1"};`,
+            command: "FR",
+            payload: { text: rxVfo === "A" ? "0" : "1" }
+          };
+        }
+        if (code === "FT") {
+          return {
+            family: "kenwood",
+            raw: `FT${txVfo === "A" ? "0" : "1"};`,
+            command: "FT",
+            payload: { text: txVfo === "A" ? "0" : "1" }
+          };
+        }
+        if (code === "FA") {
+          return {
+            family: "kenwood",
+            raw: `FA${freqA.toString().padStart(11, "0")};`,
+            command: "FA",
+            payload: { text: freqA.toString().padStart(11, "0") }
+          };
+        }
+        return {
+          family: "kenwood",
+          raw: `FB${freqB.toString().padStart(11, "0")};`,
+          command: "FB",
+          payload: { text: freqB.toString().padStart(11, "0") }
+        };
+      }
+    };
+
+    await adapter.setSplit!(client, true);
+    expect(txVfo).toBe("B");
+    expect(freqB).toBe(14075000);
+
+    await adapter.setSplit!(client, false);
+    expect(txVfo).toBe(rxVfo);
+
+    await expect(adapter.getSplit!(client)).resolves.toBe(false);
+  });
 });
 
 describe("Rig facade", () => {
@@ -224,14 +298,51 @@ describe("Rig facade", () => {
     await rig.setPtt(true);
     await rig.setPtt(false);
 
-    expect(session.writes.slice(0, 6)).toEqual([
+    expect(session.writes.slice(0, 8)).toEqual([
       "FR0;",
+      "SP0;",
       "FT0;",
+      "SP0;",
       "FA00018100000;",
       "MD2;",
       "TX;",
       "RX;"
     ]);
+  });
+
+  it("uses model splitAction commands for QMX split toggling", async () => {
+    const session = new MockSerialSession();
+    const rig = Rig.create("kenwood", "qmx");
+    await rig.connectWithSession(session);
+
+    await rig.setRxVfo("A");
+    await rig.setTxVfo("B");
+    await rig.setTxVfo("A");
+
+    expect(session.writes).toContain("SP1;");
+    expect(session.writes.filter((write) => write === "SP0;").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("uses splitAction commands for setSplit/getSplit on QMX", async () => {
+    const session = new MockSerialSession();
+    const rig = Rig.create("kenwood", "qmx");
+    await rig.connectWithSession(session);
+
+    await rig.setSplit(true);
+    expect(session.writes.at(-1)).toBe("SP1;");
+
+    const getOnPromise = rig.getSplit();
+    expect(session.writes.at(-1)).toBe("SP;");
+    session.emitAscii("SP1;");
+    await expect(getOnPromise).resolves.toBe(true);
+
+    await rig.setSplit(false);
+    expect(session.writes.at(-1)).toBe("SP0;");
+
+    const getOffPromise = rig.getSplit();
+    expect(session.writes.at(-1)).toBe("SP;");
+    session.emitAscii("SP0;");
+    await expect(getOffPromise).resolves.toBe(false);
   });
 
   it("returns last set PTT state when protocol has no PTT readback", async () => {

@@ -35,6 +35,13 @@ export interface ModelAdapterContext {
 export interface ProtocolControlClientStatus {
   protocolFamily?: ProtocolFamily;
   modelId?: string;
+  splitAction?: {
+    command: {
+      on: string;
+      off: string;
+      get?: string;
+    };
+  };
 }
 
 export interface ProtocolControlClient {
@@ -69,6 +76,8 @@ export interface ProtocolAdapter {
   getFrequency?(client: ProtocolControlClient, vfo: VfoId): Promise<number>;
   setModulationMode?(client: ProtocolControlClient, mode: ModulationMode): Promise<void>;
   getModulationMode?(client: ProtocolControlClient): Promise<ModulationMode>;
+  setSplit?(client: ProtocolControlClient, on: boolean): Promise<void>;
+  getSplit?(client: ProtocolControlClient): Promise<boolean>;
   switchToTx?(client: ProtocolControlClient, options?: TxSwitchOptions): Promise<void>;
   switchToRx?(client: ProtocolControlClient): Promise<void>;
 }
