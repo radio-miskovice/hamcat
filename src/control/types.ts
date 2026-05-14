@@ -20,8 +20,6 @@ export interface MinimalCatControl {
   getTxVfo(): Promise<VfoId>;
   setRxVfo(vfo: VfoId): Promise<void>;
   getRxVfo(): Promise<VfoId>;
-  setSplit(mode: "on" | "off"): Promise<void>;
-  getSplit(): Promise<"on" | "off">;
   setFrequency(vfo: VfoId, frequencyHz: number): Promise<void>;
   getFrequency(vfo: VfoId): Promise<number>;
   setModulationMode(mode: ModulationMode): Promise<void>;

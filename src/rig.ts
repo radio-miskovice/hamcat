@@ -58,12 +58,9 @@ export type RigFunction =
   | "mode"
   | "rxVfo"
   | "txVfo"
-  | "split"
   | "tx"
   | "rx"
   | "dataSource";
-
-export type SplitMode = "on" | "off";
 
 export interface RigInterface {
   readonly features: RigModelFeatures | null;
@@ -91,8 +88,6 @@ export interface RigInterface {
   getRxVfo(): Promise<VfoId>;
   setTxVfo(vfo: VfoId): Promise<void>;
   getTxVfo(): Promise<VfoId>;
-  setSplit(mode: SplitMode): Promise<void>;
-  getSplit(): Promise<SplitMode>;
   tx(options?: TxSwitchOptions): Promise<void>;
   rx(): Promise<void>;
 
@@ -349,63 +344,6 @@ export class Rig implements RigInterface {
     return this.getControlAdapter().getTxVfo!(this.client);
   }
 
-  async setSplit(mode: SplitMode): Promise<void> {
-    const splitControl = this.modelFeatures?.splitControl;
-    if (splitControl?.kind === "mode-flag") {
-      const command = splitControl.command ?? "FT";
-      const splitValue = splitControl.splitValue ?? "2";
-      const defaultSimplex = splitControl.vfoAValue ?? "0";
-
-      if (mode === "on") {
-        await this.client.sendCommand({ code: command, args: [splitValue] });
-        return;
-      }
-
-      const current = await this.querySplitModeValue();
-      const target = current === splitValue ? defaultSimplex : current;
-      await this.client.sendCommand({ code: command, args: [target] });
-      return;
-    }
-
-    if (splitControl?.kind === "vfo-pair") {
-      const rxVfo = await this.getRxVfo();
-      const oppositeVfo: VfoId = rxVfo === "A" ? "B" : "A";
-
-      if (mode === "on") {
-        await this.setTxVfo(oppositeVfo);
-        return;
-      }
-
-      await this.setTxVfo(rxVfo);
-      return;
-    }
-
-    const splitRxVfo = splitControl?.splitRxVfo ?? "A";
-    const splitTxVfo = splitControl?.splitTxVfo ?? "B";
-
-    if (mode === "on") {
-      await this.setRxVfo(splitRxVfo);
-      await this.setTxVfo(splitTxVfo);
-      return;
-    }
-
-    // FR selection on TS-590 explicitly returns rig to simplex state.
-    await this.setRxVfo(splitRxVfo);
-  }
-
-  async getSplit(): Promise<SplitMode> {
-    const splitControl = this.modelFeatures?.splitControl;
-    if (splitControl?.kind === "mode-flag") {
-      const splitValue = splitControl.splitValue ?? "2";
-      const value = await this.querySplitModeValue();
-      return value === splitValue ? "on" : "off";
-    }
-
-    const rxVfo = await this.getRxVfo();
-    const txVfo = await this.getTxVfo();
-    return rxVfo === txVfo ? "off" : "on";
-  }
-
   async tx(options?: TxSwitchOptions): Promise<void> {
     await this.getControlAdapter().switchToTx!(this.client, options);
   }
@@ -424,8 +362,6 @@ export class Rig implements RigInterface {
         return this.getRxVfo();
       case "txVfo":
         return this.getTxVfo();
-      case "split":
-        return this.getSplit();
       case "tx":
       case "rx":
       case "dataSource":
@@ -467,13 +403,6 @@ export class Rig implements RigInterface {
           throw new Error("set('txVfo') requires VFO 'A' or 'B'.");
         }
         await this.setTxVfo(data);
-        return;
-      }
-      case "split": {
-        if (data !== "on" && data !== "off") {
-          throw new Error("set('split') requires 'on' or 'off'.");
-        }
-        await this.setSplit(data);
         return;
       }
       case "tx": {

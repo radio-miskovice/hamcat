@@ -42,9 +42,6 @@ interface RigInterface {
 	setTxVfo(vfo: VfoId): Promise<void>;
 	getTxVfo(): Promise<VfoId>;
 
-	setSplit(mode: SplitMode): Promise<void>;
-	getSplit(): Promise<SplitMode>;
-
 	tx(options?: TxSwitchOptions): Promise<void>;
 	rx(): Promise<void>;
 
@@ -95,9 +92,6 @@ class Rig {
 	setTxVfo(vfo: VfoId): Promise<void>;
 	getTxVfo(): Promise<VfoId>;
 
-	setSplit(mode: SplitMode): Promise<void>;
-	getSplit(): Promise<SplitMode>;
-
 	tx(options?: TxSwitchOptions): Promise<void>;
 	rx(): Promise<void>;
 	listModels(options?: RigListModelsOptions): RigListedModel[];
@@ -114,9 +108,6 @@ class Rig {
 Notes:
 - `Rig` delegates baseline control operations to the selected protocol adapter.
 - If a family adapter does not implement the baseline operation set, `Rig` methods throw.
-- `setSplit("on" | "off")` is model-aware:
-	- `mode-flag` rigs use configured CAT mode flag values.
-	- `vfo-pair` rigs set configured split RX/TX VFOs on `on`, and return to simplex on `off`.
 
 ### `RigNode`
 
@@ -203,12 +194,9 @@ type RigFunction =
 	| "mode"
 	| "rxVfo"
 	| "txVfo"
-	| "split"
 	| "tx"
 	| "rx"
 	| "dataSource";
-
-type SplitMode = "on" | "off";
 
 interface RigListModelsOptions {
 	vendor?: string;
@@ -290,8 +278,6 @@ interface MinimalCatControl {
 	getTxVfo(): Promise<VfoId>;
 	setRxVfo(vfo: VfoId): Promise<void>;
 	getRxVfo(): Promise<VfoId>;
-	setSplit(mode: "on" | "off"): Promise<void>;
-	getSplit(): Promise<"on" | "off">;
 	setFrequency(vfo: VfoId, frequencyHz: number): Promise<void>;
 	getFrequency(vfo: VfoId): Promise<number>;
 	setModulationMode(mode: ModulationMode): Promise<void>;

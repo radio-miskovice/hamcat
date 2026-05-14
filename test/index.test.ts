@@ -121,49 +121,6 @@ describe("Minimal control API", () => {
     expect(session.writes.at(-1)).toBe("TX;");
   });
 
-  it("supports split on/off on kenwood baseline", async () => {
-    const session = new MockSerialSession();
-    const client = new HamcatClient();
-    const waitForLastWrite = async (expected: string): Promise<void> => {
-      for (let i = 0; i < 20; i++) {
-        if (session.writes.at(-1) === expected) {
-          return;
-        }
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, 0);
-        });
-      }
-      throw new Error(`Timed out waiting for write ${expected}.`);
-    };
-
-    client.useProtocol("kenwood");
-    await client.connectWithSession(session);
-
-    const control = getBaselineControlAdapter(client);
-
-    await setSplit(control, client, "on");
-    expect(session.writes.slice(-2)).toEqual(["FR0;", "FT1;"]);
-
-    const splitOnPromise = getSplit(control, client);
-    await waitForLastWrite("FR;");
-    session.emitAscii("FR0;");
-    await waitForLastWrite("FT;");
-    session.emitAscii("FT1;");
-    await expect(splitOnPromise).resolves.toBe("on");
-
-    const splitOffSetPromise = setSplit(control, client, "off");
-    await waitForLastWrite("FR;");
-    session.emitAscii("FR0;");
-    await splitOffSetPromise;
-    expect(session.writes.at(-1)).toBe("FR0;");
-
-    const splitOffPromise = getSplit(control, client);
-    await waitForLastWrite("FR;");
-    session.emitAscii("FR0;");
-    await waitForLastWrite("FT;");
-    session.emitAscii("FT0;");
-    await expect(splitOffPromise).resolves.toBe("off");
-  });
 });
 
 describe("Protocol adapters", () => {
@@ -308,59 +265,7 @@ describe("Rig facade", () => {
     expect(results).toContain("sendCat");
   });
 
-  it("supports model-aware split semantics (QMX mode-flag FT=2)", async () => {
-    const session = new MockSerialSession();
-    const rig = Rig.create("kenwood", "qmx");
-    const waitForLastWrite = async (expected: string): Promise<void> => {
-      for (let i = 0; i < 20; i++) {
-        if (session.writes.at(-1) === expected) {
-          return;
-        }
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, 0);
-        });
-      }
-      throw new Error(`Timed out waiting for write ${expected}.`);
-    };
 
-    const internalClient = (rig as unknown as { client: HamcatClient }).client;
-    await internalClient.connectWithSession(session);
-
-    await rig.setSplit("on");
-    expect(session.writes.at(-1)).toBe("FT2;");
-
-    const splitOnPromise = rig.getSplit();
-    await waitForLastWrite("FT;");
-    session.emitAscii("FT2;");
-    await expect(splitOnPromise).resolves.toBe("on");
-
-    const splitOffSetPromise = rig.setSplit("off");
-    await waitForLastWrite("FT;");
-    session.emitAscii("FT2;");
-    await splitOffSetPromise;
-
-    expect(session.writes.at(-2)).toBe("FT;");
-    expect(session.writes.at(-1)).toBe("FT0;");
-
-    const splitOffPromise = rig.get("split");
-    await waitForLastWrite("FT;");
-    session.emitAscii("FT0;");
-    await expect(splitOffPromise).resolves.toBe("off");
-  });
-
-  it("enters and exits split mode for standard FT/FR models", async () => {
-    const session = new MockSerialSession();
-    const rig = Rig.create("kenwood", "ts590");
-
-    const internalClient = (rig as unknown as { client: HamcatClient }).client;
-    await internalClient.connectWithSession(session);
-
-    await rig.setSplit("on");
-    expect(session.writes.slice(-2)).toEqual(["FR0;", "FT1;"]);
-
-    await rig.setSplit("off");
-    expect(session.writes.at(-1)).toBe("FR0;");
-  });
 });
 
 class MockSerialSession implements SerialSession {
@@ -404,32 +309,4 @@ function getBaselineControlAdapter(client: HamcatClient): ProtocolAdapter {
     throw new Error("Expected protocol adapter to be selected.");
   }
   return adapter;
-}
-
-async function setSplit(
-  adapter: ProtocolAdapter,
-  client: HamcatClient,
-  mode: "on" | "off"
-): Promise<void> {
-  if (!adapter.setRxVfo || !adapter.setTxVfo || !adapter.getRxVfo) {
-    throw new Error("Baseline split control is not available on this adapter.");
-  }
-
-  if (mode === "on") {
-    await adapter.setRxVfo(client, "A");
-    await adapter.setTxVfo(client, "B");
-    return;
-  }
-
-  const rxVfo = await adapter.getRxVfo(client);
-  await adapter.setRxVfo(client, rxVfo);
-}
-
-async function getSplit(adapter: ProtocolAdapter, client: HamcatClient): Promise<"on" | "off"> {
-  if (!adapter.getRxVfo || !adapter.getTxVfo) {
-    throw new Error("Baseline split query is not available on this adapter.");
-  }
-  const rxVfo = await adapter.getRxVfo(client);
-  const txVfo = await adapter.getTxVfo(client);
-  return rxVfo === txVfo ? "off" : "on";
 }

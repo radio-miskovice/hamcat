@@ -66,7 +66,6 @@ await rig.connect(115200);
 
 await rig.setFreq(18100000);
 await rig.setMode("USB");
-await rig.setSplit("on");
 await rig.tx();
 ```
 
@@ -83,7 +82,7 @@ await rig.connect(115200, {
 Core concept:
 
 - `Rig` owns the serial session and protocol adapter selection.
-- `Rig` exposes straightforward methods (`getFreq`, `setFreq`, `getMode`, `setMode`, `setSplit`, `getSplit`, `tx`, `rx`).
+- `Rig` exposes straightforward methods (`getFreq`, `setFreq`, `getMode`, `setMode`, `tx`, `rx`).
 - `Rig` also exposes generic `get(...)` and `set(...)` hooks for future family/model extensions.
 
 Model-specific behavior is described in YAML profile files and consumed by model
@@ -147,11 +146,13 @@ Each family adapter can host a model-specific extension adapter via
 `ModelProtocolAdapter`. This allows vendor and model proprietary commands
 without forking the family-level parser/encoder.
 
-These are internal building blocks used by `Rig`.
+These are internal building blocks used by `Rig`. A this moment only `KenwoodProtocolAdapter` 
+is implemented and tested. Tests have been performed with QRP Labs QMX and Labs 599's TX-500.
+Tests with TS-590 are in the pipeline.
 
 ## Minimal viable CAT control level
 
-`Rig` currently implements the Kenwood baseline CAT controls:
+`Rig` currently implements baseline CAT controls:
 
 - TX VFO select (`setTxVfo`, `getTxVfo`)
 - RX VFO select (`setRxVfo`, `getRxVfo`)
@@ -164,5 +165,5 @@ For model-specific TX source selection (for rigs with multiple TX audio paths),
 call:
 
 ```typescript
-await rig.tx({ source: "DIG" });
+await rig.tx({ source: "USB" });
 ```
