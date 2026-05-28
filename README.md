@@ -192,15 +192,15 @@ Tests with TS-590 are in the pipeline.
 - RX VFO select (`setRxVfo`, `getRxVfo`)
 - VFO A/B frequency (`setFrequency`, `getFrequency`)
 - modulation mode (`setModulationMode`, `getModulationMode`)
-- PTT control (`setPtt`, `getPtt`)
+- PTT control (`setTx`, `getTxState`)
 
 Current baseline command mapping is implemented for the Kenwood family.
 For model-specific TX source selection (for rigs with multiple TX audio paths),
 call:
 
 ```typescript
-await rig.setPtt(true, { source: "USB" });
+await rig.setTx(true, { source: "USB" });
 ```
 
-If the active protocol does not provide a direct TX/RX state readback, `getPtt()`
-returns the last value applied through `setPtt(...)`.
+If the active protocol does not provide a direct TX/RX state readback, `getTxState()`
+returns the last value applied through `setTx(...)`.
