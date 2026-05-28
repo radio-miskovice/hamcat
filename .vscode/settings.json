@@ -4,5 +4,32 @@
             "approve": true,
             "matchCommandLine": true
         }
+    },
+    "workbench.colorTheme": "Visual Studio Light",
+    "workbench.colorCustomizations": {
+
+
+        "[Visual Studio Light]": {
+            "menu.background":"#fdfcb4",
+            "input.background":"#fdfcb4",
+            "badge.background":"#c4c4c4",
+            "panel.background":"#fdfcb4",
+            "banner.background":"#004386",
+            "button.background":"#007acc",
+            "agents.background":"#f0f0cc",
+            "editor.background":"#fdfdfa",
+            "sideBar.background":"#f3f3f3",
+            "minimap.background":"#e9d2b2",
+            "activityBar.background":"#02805a",  
+
+            "statusBar.background":"#dcf7ab",
+            "statusBar.foreground":"#000000",
+            "list.focusBackground":"#d6ebff",
+            "list.hoverBackground":"#d6ebff",
+            "scrollbar.background":"#d6ebff",
+            "selection.background":"#d6ebff",
+            "tab.activeBackground":"#ffffff",
+ 
+        }
     }
 }

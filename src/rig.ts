@@ -1,11 +1,12 @@
-import type { ModulationMode, TxSwitchOptions, VfoId } from "./control/types";
+import type { ModulationMode, TxSwitchOptions, VfoId, VfoSpec } from "./control/types";
 import {
   createProtocolAdapter,
   type CatCommand,
   type CatResponse,
   type ProtocolAdapter,
   type ProtocolControlClient,
-  type ProtocolFamily
+  type ProtocolFamily,
+  type RigStatusPatch
 } from "./protocol";
 import { connectSerialSession, type SerialSession } from "./serial-session";
 import { createModelAdapterByName } from "./models";
@@ -45,6 +46,7 @@ export interface RigStatus extends RigTransportStatus {
   frequencyAHz?: number;
   frequencyBHz?: number;
   mode?: ModulationMode;
+  txState?: boolean;
 }
 
 export interface SetFreqOptions {
@@ -67,7 +69,7 @@ export interface RigOperationResult {
 
 export type RigResponseListener = (response: CatResponse) => void;
 export type RigResultListener = (result: RigOperationResult) => void;
-export type RigStatusListener = (status: RigTransportStatus) => void;
+export type RigStatusListener = (status: RigStatus) => void;
 
 interface QueryCommandOptions {
   timeoutMs?: number;
@@ -80,7 +82,7 @@ export type RigFunction =
   | "rxVfo"
   | "txVfo"
   | "split"
-  | "ptt"
+  | "tx"
   | "dataSource";
 
 export interface RigInterface {
@@ -100,8 +102,8 @@ export interface RigInterface {
   sendCat(code: string, args?: string[]): Promise<{ success: true }>;
   queryCat(code: string, args?: string[]): Promise<CatResponse>;
 
-  setFreq(hz: number, vfo?: VfoId, options?: SetFreqOptions): Promise<SetFreqResult>;
-  getFreq(vfo?: VfoId): Promise<number>;
+  setFreq(hz: number, vfo?: VfoSpec, options?: SetFreqOptions): Promise<SetFreqResult>;
+  getFreq(vfo?: VfoSpec): Promise<number>;
 
   setMode(mode: ModulationMode): Promise<void>;
   getMode(): Promise<ModulationMode>;
@@ -111,32 +113,29 @@ export interface RigInterface {
   getTxVfo(): Promise<VfoId>;
   setSplit(on: boolean): Promise<void>;
   getSplit(): Promise<boolean>;
-  setPtt(on: boolean, options?: TxSwitchOptions): Promise<void>;
-  getPtt(): Promise<boolean>;
+  setTx(on: boolean, options?: TxSwitchOptions): Promise<void>;
+  getTxState(): Promise<boolean>;
 
-  get(functionName: RigFunction, options?: { vfo?: VfoId }): Promise<unknown>;
+  get(functionName: RigFunction, options?: { vfo?: VfoSpec }): Promise<unknown>;
   set(
     functionName: RigFunction,
     data?: unknown,
-    options?: { vfo?: VfoId; source?: string }
+    options?: { vfo?: VfoSpec; source?: string }
   ): Promise<void>;
 
-  listModels(options?: RigListModelsOptions): RigListedModel[];
+  // listModels(options?: RigListModelsOptions): RigListedModel[];
 }
 
 export class Rig implements RigInterface {
   private session: SerialSession | null = null;
   private protocolAdapter: ProtocolAdapter | null = null;
-  private transportStatus: RigTransportStatus = {
+  private rigStatus: RigStatus = {
     connected: false,
     bytesTx: 0,
     bytesRx: 0
   };
-  private lastRxVfo: VfoId = "A";
-  private lastTxVfo: VfoId = "A";
 
   private readonly modelFeatures: RigModelFeatures | null;
-  private lastPttState = false;
   private readonly statusListeners: RigStatusListener[] = [];
   private readonly responseListeners: RigResponseListener[] = [];
   private readonly resultListeners: RigResultListener[] = [];
@@ -146,7 +145,7 @@ export class Rig implements RigInterface {
     sendCommand: (command) => this.sendCommand(command),
     queryCommand: (command) => this.queryCommand(command),
     getStatus: () => ({
-      ...this.getTransportStatus(),
+      ...this.rigStatus,
       splitAction: this.modelFeatures?.splitAction
     })
   };
@@ -171,9 +170,9 @@ export class Rig implements RigInterface {
     return this.modelFeatures;
   }
 
-  listModels(options: RigListModelsOptions = {}): RigListedModel[] {
-    return Rig.listModels(options);
-  }
+  // listModels(options: RigListModelsOptions = {}): RigListedModel[] {
+  //   return Rig.listModels(options);
+  // }
 
   async connect(baudRate: number, options: RigConnectOptions = {}): Promise<void> {
     const {
@@ -221,10 +220,7 @@ export class Rig implements RigInterface {
 
     await this.session.disconnect();
     this.session = null;
-    this.transportStatus = {
-      ...this.transportStatus,
-      connected: false
-    };
+    this.rigStatus = { ...this.rigStatus, connected: false };
     this.emitStatus();
   }
 
@@ -234,23 +230,27 @@ export class Rig implements RigInterface {
     }
 
     this.session = session;
-    this.transportStatus = {
-      protocolFamily: this.transportStatus.protocolFamily,
-      modelId: this.transportStatus.modelId,
+    this.rigStatus = {
+      protocolFamily: this.rigStatus.protocolFamily,
+      modelId: this.rigStatus.modelId,
       connected: true,
       bytesTx: 0,
       bytesRx: 0
     };
 
     this.session.on((data) => {
-      this.transportStatus = {
-        ...this.transportStatus,
-        bytesRx: this.transportStatus.bytesRx + data.byteLength
+      this.rigStatus = {
+        ...this.rigStatus,
+        bytesRx: this.rigStatus.bytesRx + data.byteLength
       };
 
       if (this.protocolAdapter) {
         const responses = this.protocolAdapter.decodeIncoming(data);
         for (const response of responses) {
+          const patch = this.protocolAdapter.parseStatusFromResponse?.(response);
+          if (patch) {
+            this.rigStatus = { ...this.rigStatus, ...patch };
+          }
           this.emitResponse(response);
         }
       }
@@ -262,9 +262,8 @@ export class Rig implements RigInterface {
   }
 
   async getStatus(): Promise<RigStatus> {
-    const transport = this.getTransportStatus();
-    if (!transport.connected) {
-      return transport;
+    if (!this.rigStatus.connected) {
+      return { ...this.rigStatus };
     }
 
     const control = this.getControlAdapter();
@@ -275,14 +274,8 @@ export class Rig implements RigInterface {
     const frequencyBHz = await control.getFrequency!(this.protocolClient, "B");
     const mode = await control.getModulationMode!(this.protocolClient);
 
-    return {
-      ...transport,
-      rxVfo,
-      txVfo,
-      frequencyAHz,
-      frequencyBHz,
-      mode
-    };
+    this.rigStatus = { ...this.rigStatus, rxVfo, txVfo, frequencyAHz, frequencyBHz, mode };
+    return { ...this.rigStatus };
   }
 
   onStatus(listener: RigStatusListener): void {
@@ -347,24 +340,31 @@ export class Rig implements RigInterface {
 
   async setFreq(
     hz: number,
-    vfo: VfoId = "A",
+    vfo?: VfoSpec,
     options: SetFreqOptions = {}
   ): Promise<SetFreqResult> {
+    const resolvedVfo = this.resolveVfo(vfo);
     const control = this.getControlAdapter();
-    await control.setFrequency!(this.protocolClient, vfo, hz);
+    await control.setFrequency!(this.protocolClient, resolvedVfo, hz);
 
     if (options.verify === false) {
+      this.rigStatus = resolvedVfo === "A"
+        ? { ...this.rigStatus, frequencyAHz: hz }
+        : { ...this.rigStatus, frequencyBHz: hz };
       return {
-        vfo,
+        vfo: resolvedVfo,
         requestedHz: hz,
         appliedHz: hz,
         accepted: true
       };
     }
 
-    const appliedHz = await control.getFrequency!(this.protocolClient, vfo);
+    const appliedHz = await control.getFrequency!(this.protocolClient, resolvedVfo);
+    this.rigStatus = resolvedVfo === "A"
+      ? { ...this.rigStatus, frequencyAHz: appliedHz }
+      : { ...this.rigStatus, frequencyBHz: appliedHz };
     const result = {
-      vfo,
+      vfo: resolvedVfo,
       requestedHz: hz,
       appliedHz,
       accepted: appliedHz === hz
@@ -373,7 +373,7 @@ export class Rig implements RigInterface {
       operation: "setFreq",
       success: result.accepted,
       details: {
-        vfo,
+        vfo: resolvedVfo,
         requestedHz: hz,
         appliedHz
       }
@@ -381,21 +381,29 @@ export class Rig implements RigInterface {
     return result;
   }
 
-  async getFreq(vfo: VfoId = "A"): Promise<number> {
-    return this.getControlAdapter().getFrequency!(this.protocolClient, vfo);
+  async getFreq(vfo?: VfoSpec): Promise<number> {
+    const resolvedVfo = this.resolveVfo(vfo);
+    const hz = await this.getControlAdapter().getFrequency!(this.protocolClient, resolvedVfo);
+    this.rigStatus = resolvedVfo === "A"
+      ? { ...this.rigStatus, frequencyAHz: hz }
+      : { ...this.rigStatus, frequencyBHz: hz };
+    return hz;
   }
 
   async setMode(mode: ModulationMode): Promise<void> {
     await this.getControlAdapter().setModulationMode!(this.protocolClient, mode);
+    this.rigStatus = { ...this.rigStatus, mode };
   }
 
   async getMode(): Promise<ModulationMode> {
-    return this.getControlAdapter().getModulationMode!(this.protocolClient);
+    const mode = await this.getControlAdapter().getModulationMode!(this.protocolClient);
+    this.rigStatus = { ...this.rigStatus, mode };
+    return mode;
   }
 
   async setRxVfo(vfo: VfoId): Promise<void> {
     await this.getControlAdapter().setRxVfo!(this.protocolClient, vfo);
-    this.lastRxVfo = vfo;
+    this.rigStatus = { ...this.rigStatus, rxVfo: vfo };
     await this.applyModelSplitAction();
   }
 
@@ -405,18 +413,18 @@ export class Rig implements RigInterface {
       const value = await this.querySplitModeValue();
       if (value === splitControl.splitValue) {
         const resolved = splitControl.splitRxVfo ?? "A";
-        this.lastRxVfo = resolved;
+        this.rigStatus = { ...this.rigStatus, rxVfo: resolved };
         return resolved;
       }
     }
     const resolved = await this.getControlAdapter().getRxVfo!(this.protocolClient);
-    this.lastRxVfo = resolved;
+    this.rigStatus = { ...this.rigStatus, rxVfo: resolved };
     return resolved;
   }
 
   async setTxVfo(vfo: VfoId): Promise<void> {
     await this.getControlAdapter().setTxVfo!(this.protocolClient, vfo);
-    this.lastTxVfo = vfo;
+    this.rigStatus = { ...this.rigStatus, txVfo: vfo };
     await this.applyModelSplitAction();
   }
 
@@ -426,28 +434,28 @@ export class Rig implements RigInterface {
       const value = await this.querySplitModeValue();
       if (value === splitControl.splitValue) {
         const resolved = splitControl.splitTxVfo ?? "B";
-        this.lastTxVfo = resolved;
+        this.rigStatus = { ...this.rigStatus, txVfo: resolved };
         return resolved;
       }
     }
     const resolved = await this.getControlAdapter().getTxVfo!(this.protocolClient);
-    this.lastTxVfo = resolved;
+    this.rigStatus = { ...this.rigStatus, txVfo: resolved };
     return resolved;
   }
 
-  async setPtt(on: boolean, options?: TxSwitchOptions): Promise<void> {
+  async setTx(on: boolean, options?: TxSwitchOptions): Promise<void> {
     if (on) {
       await this.getControlAdapter().switchToTx!(this.protocolClient, options);
-      this.lastPttState = true;
+      this.rigStatus = { ...this.rigStatus, txState: true };
       return;
     }
 
     await this.getControlAdapter().switchToRx!(this.protocolClient);
-    this.lastPttState = false;
+    this.rigStatus = { ...this.rigStatus, txState: false };
   }
 
-  async getPtt(): Promise<boolean> {
-    return this.lastPttState;
+  async getTxState(): Promise<boolean> {
+    return this.rigStatus.txState ?? false;
   }
 
   async setSplit(on: boolean): Promise<void> {
@@ -458,10 +466,10 @@ export class Rig implements RigInterface {
     return this.getControlAdapter().getSplit!(this.protocolClient);
   }
 
-  async get(functionName: RigFunction, options?: { vfo?: VfoId }): Promise<unknown> {
+  async get(functionName: RigFunction, options?: { vfo?: VfoSpec }): Promise<unknown> {
     switch (functionName) {
       case "freq":
-        return this.getFreq(options?.vfo ?? "A");
+        return this.getFreq(options?.vfo);
       case "mode":
         return this.getMode();
       case "rxVfo":
@@ -470,8 +478,8 @@ export class Rig implements RigInterface {
         return this.getTxVfo();
       case "split":
         return this.getSplit();
-      case "ptt":
-        return this.getPtt();
+      case "tx":
+        return this.getTxState();
       case "dataSource":
         throw new Error(`Function '${functionName}' is write-only.`);
       default:
@@ -482,14 +490,14 @@ export class Rig implements RigInterface {
   async set(
     functionName: RigFunction,
     data?: unknown,
-    options?: { vfo?: VfoId; source?: string }
+    options?: { vfo?: VfoSpec; source?: string }
   ): Promise<void> {
     switch (functionName) {
       case "freq": {
         if (!Number.isInteger(data) || (data as number) < 0) {
           throw new Error("set('freq') requires a non-negative integer frequency in Hz.");
         }
-        await this.setFreq(data as number, options?.vfo ?? "A");
+        await this.setFreq(data as number, options?.vfo);
         return;
       }
       case "mode": {
@@ -520,11 +528,11 @@ export class Rig implements RigInterface {
         await this.setSplit(data);
         return;
       }
-      case "ptt": {
+      case "tx": {
         if (typeof data !== "boolean") {
-          throw new Error("set('ptt') requires boolean data.");
+          throw new Error("set('tx') requires boolean data.");
         }
-        await this.setPtt(
+        await this.setTx(
           data,
           data && options?.source
             ? ({ source: options.source } as TxSwitchOptions)
@@ -544,6 +552,20 @@ export class Rig implements RigInterface {
     }
   }
 
+  private resolveVfo(vfo?: string): VfoId {
+    const normalized = vfo?.toUpperCase();
+    if (normalized === undefined || normalized === "RX") {
+      return this.rigStatus.rxVfo ?? "A";
+    }
+    if (normalized === "TX") {
+      return this.rigStatus.txVfo ?? "A";
+    }
+    if (normalized === "A" || normalized === "B") {
+      return normalized;
+    }
+    throw new Error(`Invalid VFO specifier: '${vfo}'.`);
+  }
+
   private async querySplitModeValue(): Promise<string> {
     const command = this.modelFeatures?.splitControl?.command ?? "FT";
     const response = await this.queryCommand({ code: command });
@@ -560,7 +582,7 @@ export class Rig implements RigInterface {
       return;
     }
 
-    const raw = this.lastRxVfo !== this.lastTxVfo
+    const raw = this.rigStatus.rxVfo !== this.rigStatus.txVfo
       ? splitAction.command.on
       : splitAction.command.off;
 
@@ -607,8 +629,8 @@ export class Rig implements RigInterface {
   private useProtocol(family: ProtocolFamily, model?: string): void {
     const modelAdapter = model ? createModelAdapterByName(family, model) : undefined;
     this.protocolAdapter = createProtocolAdapter({ family, modelAdapter });
-    this.transportStatus = {
-      ...this.transportStatus,
+    this.rigStatus = {
+      ...this.rigStatus,
       protocolFamily: family,
       modelId: modelAdapter?.modelId
     };
@@ -648,9 +670,9 @@ export class Rig implements RigInterface {
   private async sendBytes(data: Uint8Array): Promise<void> {
     this.assertConnected();
     await this.session!.writeBytes(data);
-    this.transportStatus = {
-      ...this.transportStatus,
-      bytesTx: this.transportStatus.bytesTx + data.byteLength
+    this.rigStatus = {
+      ...this.rigStatus,
+      bytesTx: this.rigStatus.bytesTx + data.byteLength
     };
     this.emitStatus();
   }
@@ -702,7 +724,7 @@ export class Rig implements RigInterface {
   }
 
   private getTransportStatus(): RigTransportStatus {
-    return { ...this.transportStatus };
+    return { ...this.rigStatus };
   }
 
   private assertConnected(): void {
@@ -720,7 +742,7 @@ export class Rig implements RigInterface {
   }
 
   private emitStatus(): void {
-    const snapshot = this.getTransportStatus();
+    const snapshot = { ...this.rigStatus };
     for (const listener of this.statusListeners) {
       queueMicrotask(() => listener(snapshot));
     }

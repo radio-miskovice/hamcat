@@ -100,7 +100,7 @@ await rig.connect(115200);
 
 await rig.setFreq(18100000);
 await rig.setMode("USB");
-await rig.setPtt(true);
+await rig.setTx(true);
 ```
 
 You can also set modem control lines during connect when a rig requires fixed
@@ -116,7 +116,7 @@ await rig.connect(115200, {
 Core concept:
 
 - `Rig` owns the serial session and protocol adapter selection.
-- `Rig` exposes straightforward methods (`getFreq`, `setFreq`, `getMode`, `setMode`, `setPtt`, `getPtt`).
+- `Rig` exposes straightforward methods (`getFreq`, `setFreq`, `getMode`, `setMode`, `setTx`, `getTxState`).
 - `Rig` also exposes generic `get(...)` and `set(...)` hooks for future family/model extensions.
 
 Model-specific behavior is described in YAML profile files and consumed by model

@@ -295,8 +295,8 @@ describe("Rig facade", () => {
     await rig.setTxVfo("A");
     await rig.setFreq(18100000, "A", { verify: false });
     await rig.setMode("USB");
-    await rig.setPtt(true);
-    await rig.setPtt(false);
+    await rig.setTx(true);
+    await rig.setTx(false);
 
     expect(session.writes.slice(0, 8)).toEqual([
       "FR0;",
@@ -351,11 +351,11 @@ describe("Rig facade", () => {
 
     await rig.connectWithSession(session);
 
-    await expect(rig.getPtt()).resolves.toBe(false);
-    await rig.setPtt(true);
-    await expect(rig.getPtt()).resolves.toBe(true);
-    await rig.setPtt(false);
-    await expect(rig.getPtt()).resolves.toBe(false);
+    await expect(rig.getTxState()).resolves.toBe(false);
+    await rig.setTx(true);
+    await expect(rig.getTxState()).resolves.toBe(true);
+    await rig.setTx(false);
+    await expect(rig.getTxState()).resolves.toBe(false);
   });
 
   it("reports adjusted frequency when rig does not accept requested value", async () => {

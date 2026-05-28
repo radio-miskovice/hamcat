@@ -12,6 +12,8 @@ ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 export type VfoId = "A" | "B";
 
+export type VfoSpec = VfoId | "TX" | "RX";
+
 export type ModulationMode =
   | "LSB"
   | "USB"
@@ -20,8 +22,8 @@ export type ModulationMode =
   | "AM"
   | "FSK"
   | "CW-R"
-  | "DATA"
-  | "FSK-R";
+  | "FSK-R"
+;
 
 export interface TxSwitchOptions {
   source?: string;

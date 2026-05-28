@@ -25,6 +25,7 @@ hamCatModels:
         off: SP0;
         get: SP;
     vfoSplitPattern: same-band
+    extra:
 
   kenwood.ts590:
     protocol: kenwood
@@ -41,12 +42,20 @@ hamCatModels:
     extra:
       dataSource:
         hint: TX audio data source selection
-        value:
-          setCommandPrefix: EX0630000
-          sourceMap:
+        command: 
+          prefix: "EX0630000"
+          options:
             ACC2: "0"
             USB: "1"
-
+      keyText:
+        hint: Send CW text
+        command:
+          prefix: "KY "
+          minLength: 24
+          maxLength: 24
+      keyStop:
+        hint: Stop CW text
+        command: "KY0;"
   kenwood.ts480:
     protocol: kenwood
     model: ts480
@@ -118,5 +127,7 @@ hamCatModels:
     model: tx500
     vendor: labs599
     displayName: TX-500
-    ptt: rts
+    signals:
+      rts: ptt
+      dtr: none
     vfoSplitPattern: same-band

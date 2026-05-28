@@ -47,6 +47,7 @@ $defs:
     type: string
     enum:
       - none
+      - ptt
       - ptt-on
       - ptt-off
       - flow
@@ -124,16 +125,39 @@ $defs:
             $ref: "#/$defs/vfoId"
           splitTxVfo:
             $ref: "#/$defs/vfoId"
+  extraCommand:
+    type: object
+    additionalProperties: false
+    required:
+      - prefix
+    properties:
+      prefix:
+        type: string
+        minLength: 1
+      options:
+        type: object
+        additionalProperties:
+          type: string
+      minLength:
+        type: integer
+        minimum: 0
+      maxLength:
+        type: integer
+        minimum: 0
   extraFeature:
     type: object
     additionalProperties: false
     required:
       - hint
-      - value
+      - command
     properties:
       hint:
         type: string
-      value: true
+      command:
+        oneOf:
+          - type: string
+            minLength: 1
+          - $ref: "#/$defs/extraCommand"
   vendor:
     type: object
     additionalProperties: false

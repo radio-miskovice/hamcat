@@ -62,12 +62,22 @@ export interface ModelProtocolAdapter {
   ): CatResponse[] | null;
 }
 
+export interface RigStatusPatch {
+  rxVfo?: VfoId;
+  txVfo?: VfoId;
+  frequencyAHz?: number;
+  frequencyBHz?: number;
+  mode?: ModulationMode;
+  txState?: boolean;
+}
+
 export interface ProtocolAdapter {
   readonly family: ProtocolFamily;
   readonly modelId?: string;
   setModelAdapter(adapter: ModelProtocolAdapter | null): void;
   encodeCommand(command: CatCommand): Uint8Array;
   decodeIncoming(data: Uint8Array): CatResponse[];
+  parseStatusFromResponse?(response: CatResponse): RigStatusPatch | null;
   setTxVfo?(client: ProtocolControlClient, vfo: VfoId): Promise<void>;
   getTxVfo?(client: ProtocolControlClient): Promise<VfoId>;
   setRxVfo?(client: ProtocolControlClient, vfo: VfoId): Promise<void>;

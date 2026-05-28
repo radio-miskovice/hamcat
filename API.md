@@ -43,8 +43,8 @@ interface RigInterface {
 	getTxVfo(): Promise<VfoId>;
 	setSplit(on: boolean): Promise<void>;
 	getSplit(): Promise<boolean>;
-	setPtt(on: boolean, options?: TxSwitchOptions): Promise<void>;
-	getPtt(): Promise<boolean>;
+	setTx(on: boolean, options?: TxSwitchOptions): Promise<void>;
+	getTxState(): Promise<boolean>;
 
 	listModels(options?: RigListModelsOptions): RigListedModel[];
 
@@ -94,8 +94,8 @@ class Rig {
 	getTxVfo(): Promise<VfoId>;
 	setSplit(on: boolean): Promise<void>;
 	getSplit(): Promise<boolean>;
-	setPtt(on: boolean, options?: TxSwitchOptions): Promise<void>;
-	getPtt(): Promise<boolean>;
+	setTx(on: boolean, options?: TxSwitchOptions): Promise<void>;
+	getTxState(): Promise<boolean>;
 	listModels(options?: RigListModelsOptions): RigListedModel[];
 
 	get(functionName: RigFunction, options?: { vfo?: VfoId }): Promise<unknown>;
@@ -110,7 +110,7 @@ class Rig {
 Notes:
 - `Rig` delegates baseline control operations to the selected protocol adapter.
 - If a family adapter does not implement the baseline operation set, `Rig` methods throw.
-- `getPtt()` returns protocol readback when available; otherwise it returns the last state set by `setPtt(...)`.
+- `getTxState()` returns protocol readback when available; otherwise it returns the last state set by `setTx(...)`.
 
 ### `RigNode`
 
@@ -166,6 +166,7 @@ interface RigStatus extends RigTransportStatus {
 	frequencyAHz?: number;
 	frequencyBHz?: number;
 	mode?: ModulationMode;
+	txState?: boolean;
 }
 
 interface SetFreqOptions {
@@ -188,7 +189,7 @@ interface RigOperationResult {
 
 type RigResponseListener = (response: CatResponse) => void;
 type RigResultListener = (result: RigOperationResult) => void;
-type RigStatusListener = (status: RigTransportStatus) => void;
+type RigStatusListener = (status: RigStatus) => void;
 
 type RigFunction =
 	| "freq"
@@ -196,7 +197,7 @@ type RigFunction =
 	| "rxVfo"
 	| "txVfo"
 	| "split"
-	| "ptt"
+	| "tx"
 	| "dataSource";
 
 interface RigListModelsOptions {

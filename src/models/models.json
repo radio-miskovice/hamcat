@@ -37,7 +37,8 @@
           "get": "SP;"
         }
       },
-      "vfoSplitPattern": "same-band"
+      "vfoSplitPattern": "same-band",
+      "extra": null
     },
     "kenwood.ts590": {
       "protocol": "kenwood",
@@ -56,13 +57,25 @@
       "extra": {
         "dataSource": {
           "hint": "TX audio data source selection",
-          "value": {
-            "setCommandPrefix": "EX0630000",
-            "sourceMap": {
+          "command": {
+            "prefix": "EX0630000",
+            "options": {
               "ACC2": "0",
               "USB": "1"
             }
           }
+        },
+        "keyText": {
+          "hint": "Send CW text",
+          "command": {
+            "prefix": "KY ",
+            "minLength": 24,
+            "maxLength": 24
+          }
+        },
+        "keyStop": {
+          "hint": "Stop CW text",
+          "command": "KY0;"
         }
       }
     },
@@ -136,7 +149,10 @@
       "model": "tx500",
       "vendor": "labs599",
       "displayName": "TX-500",
-      "ptt": "rts",
+      "signals": {
+        "rts": "ptt",
+        "dtr": "none"
+      },
       "vfoSplitPattern": "same-band"
     }
   }
