@@ -108,7 +108,7 @@ export interface RigModelFeatures {
   extra?: RigExtraFeatures;
 }
 
-export const RIG_MODEL_CATALOG: RigModelCatalog = featureEntries as RigModelCatalog;
+export const RIG_MODEL_CATALOG: RigModelCatalog = featureEntries as unknown as RigModelCatalog;
 
 function parseModelId(modelId: string): { vendorFromId?: string; modelFromId?: string } {
   const parts = modelId.split(".");
