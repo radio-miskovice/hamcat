@@ -1,6 +1,6 @@
 {
   "name": "hamcat",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "Ham radio CAT serial transport for browser (Web Serial API) and Node.js (serialport)",
   "type": "module",
   "main": "./build/index.js",
