@@ -674,6 +674,11 @@ export class Rig implements RigInterface {
       ...this.rigStatus,
       bytesTx: this.rigStatus.bytesTx + data.byteLength
     };
+    console.debug("[hamcat:transport] tx.afterWrite", {
+      bytesTx: this.rigStatus.bytesTx,
+      bytesRx: this.rigStatus.bytesRx,
+      lastWriteSize: data.byteLength
+    });
     this.emitStatus();
   }
 

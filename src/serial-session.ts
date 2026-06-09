@@ -11,6 +11,117 @@ export interface SerialSignalOptions {
   dtr?: boolean;
 }
 
+interface SerialPortWithInfo extends SerialPort {
+  getInfo?: () => unknown;
+  getSignals?: () => Promise<unknown>;
+}
+
+function nowMs(): number {
+  if (typeof performance !== "undefined" && typeof performance.now === "function") {
+    return performance.now();
+  }
+  return Date.now();
+}
+
+function toHex(data: Uint8Array): string {
+  return Array.from(data, (byte) => byte.toString(16).padStart(2, "0")).join(" ");
+}
+
+function toAscii(data: Uint8Array): string {
+  let ascii = "";
+  for (const byte of data) {
+    ascii += byte >= 0x20 && byte <= 0x7e ? String.fromCharCode(byte) : ".";
+  }
+  return ascii;
+}
+
+function serialDiag(event: string, details: Record<string, unknown>): void {
+  console.debug(`[hamcat:webserial] ${event}`, details);
+}
+
+function describeRuntime(): Record<string, unknown> {
+  if (typeof navigator === "undefined") {
+    return { navigator: "unavailable" };
+  }
+
+  return {
+    userAgent: navigator.userAgent,
+    platform:
+      typeof navigator.platform === "string" && navigator.platform.length > 0
+        ? navigator.platform
+        : "unknown",
+    language: navigator.language
+  };
+}
+
+function toRuntimeOpenOptions(options: SerialOptions): Record<string, unknown> {
+  const normalized: Record<string, unknown> = { baudRate: options.baudRate };
+  if (options.dataBits !== undefined) {
+    normalized.dataBits = options.dataBits;
+  }
+  if (options.stopBits !== undefined) {
+    normalized.stopBits = options.stopBits;
+  }
+  if (options.parity !== undefined) {
+    normalized.parity = options.parity;
+  }
+  if (options.bufferSize !== undefined) {
+    normalized.bufferSize = options.bufferSize;
+  }
+  if (options.flowControl !== undefined) {
+    normalized.flowControl = options.flowControl;
+  }
+  return normalized;
+}
+
+async function writeWithDiagnostics(
+  writer: WritableStreamDefaultWriter<Uint8Array>,
+  data: Uint8Array,
+  writeKind: "bytes" | "text"
+): Promise<void> {
+  const hex = toHex(data);
+  const ascii = toAscii(data);
+  const desiredSizeBefore = writer.desiredSize;
+  const readyStarted = nowMs();
+  await writer.ready;
+  const readyWaitMs = Number((nowMs() - readyStarted).toFixed(3));
+  const started = nowMs();
+
+  serialDiag("writer.write.before", {
+    writeKind,
+    length: data.byteLength,
+    hex,
+    ascii,
+    desiredSizeBefore,
+    readyWaitMs
+  });
+
+  try {
+    await writer.write(data);
+    serialDiag("writer.write.after", {
+      writeKind,
+      length: data.byteLength,
+      hex,
+      ascii,
+      desiredSizeAfter: writer.desiredSize,
+      elapsedMs: Number((nowMs() - started).toFixed(3)),
+      ok: true
+    });
+  } catch (error) {
+    serialDiag("writer.write.after", {
+      writeKind,
+      length: data.byteLength,
+      hex,
+      ascii,
+      desiredSizeAfter: writer.desiredSize,
+      elapsedMs: Number((nowMs() - started).toFixed(3)),
+      ok: false,
+      error: error instanceof Error ? error.message : String(error)
+    });
+    throw error;
+  }
+}
+
 export function isWebSerialSupported(): boolean {
   return typeof navigator !== "undefined" && "serial" in navigator;
 }
@@ -28,8 +139,28 @@ export async function openSerialPort(
   port: SerialPort,
   options: SerialOptions
 ): Promise<void> {
+  serialDiag("runtime.info", describeRuntime());
+
+  const portWithInfo = port as SerialPortWithInfo;
+  if (typeof portWithInfo.getInfo === "function") {
+    let info: unknown;
+    try {
+      info = portWithInfo.getInfo();
+    } catch (error) {
+      info = { error: error instanceof Error ? error.message : String(error) };
+    }
+    serialDiag("port.info", { info });
+  }
+
   if (!port.readable && !port.writable) {
+    serialDiag("port.open.options", {
+      options: toRuntimeOpenOptions(options)
+    });
     await port.open(options);
+    serialDiag("port.open.after", {
+      readable: port.readable !== null,
+      writable: port.writable !== null
+    });
   }
 }
 
@@ -77,7 +208,7 @@ export function createWebSerialSession(port: SerialPort): SerialSession {
 
   return {
     async writeBytes(data: Uint8Array) {
-      await writer.write(data);
+      await writeWithDiagnostics(writer, data, "bytes");
     },
     async writeText(text: string) {
       const bytes = new Uint8Array(text.length);
@@ -90,7 +221,7 @@ export function createWebSerialSession(port: SerialPort): SerialSession {
         }
         bytes[i] = code;
       }
-      await writer.write(bytes);
+      await writeWithDiagnostics(writer, bytes, "text");
     },
     on(listener: (data: Uint8Array) => void) {
       dataListeners.push(listener);
@@ -125,6 +256,24 @@ export async function connectSerialSession(
       requestToSend: signalOptions.rts,
       dataTerminalReady: signalOptions.dtr
     });
+    serialDiag("port.setSignals.after", {
+      requestToSend: signalOptions.rts,
+      dataTerminalReady: signalOptions.dtr
+    });
+
+    const portWithInfo = port as SerialPortWithInfo;
+    if (typeof portWithInfo.getSignals === "function") {
+      try {
+        const signals = await portWithInfo.getSignals();
+        serialDiag("port.getSignals.afterSetSignals", {
+          signals
+        });
+      } catch (error) {
+        serialDiag("port.getSignals.afterSetSignals", {
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
   }
 
   return createWebSerialSession(port);
